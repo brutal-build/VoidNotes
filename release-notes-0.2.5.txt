@@ -1,0 +1,3 @@
+## v0.2.5
+- Fixed spoiler toggle in preview (`||spoiler||` now reveals on click)
+- Minor UI and markdown pipeline cleanup
