@@ -37,7 +37,7 @@ export default function Settings({ onClose, onSwitchVault }: SettingsProps) {
           <div className="settings-section">
             <div className="settings-label">About</div>
             <p className="settings-hint">
-              Void Notes v0.2.0<br />
+              Void Notes v0.2.5<br />
               A minimalist second-brain notepad.<br />
               Built with Electron + React + CodeMirror 6.
             </p>

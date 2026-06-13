@@ -95,6 +95,16 @@ npm run dev    # Start Vite dev server + Electron (hot reload)
 └── LICENSE
 ```
 
+## Releases
+
+### v0.2.5
+- Fixed spoiler toggle in preview (`||spoiler||` now reveals on click)
+- Bumped shown app version to `0.2.5` (status bar + Settings > About)
+- Minor UI and markdown pipeline cleanup
+
+### v0.2.0
+- Initial public release with vault system, wiki links, preview, backlinks, Discord-style formatting, callouts, frontmatter, command palette, file tree, dark mode, auto-save, and traffic lights.
+
 ## Roadmap
 
 - [ ] Graph view (note connections visualization)

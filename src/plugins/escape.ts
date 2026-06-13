@@ -13,7 +13,7 @@
 
 export function processEscapes(text: string): string {
   return text.replace(
-    /\\([\\*_{}\[\]()#+\-.!|`~>])/g,
+    /\\([\\*_{}\[\]()#+\-.!`~>])/g,
     (_match, char) => `&#${char.charCodeAt(0)};`
   );
 }

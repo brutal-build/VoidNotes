@@ -1,6 +1,6 @@
 {
   "name": "void-notes",
-  "version": "0.2.0",
+  "version": "0.2.5",
   "description": "Second-brain notatnik Markdown oparty o Electron + React + CodeMirror 6",
   "main": "dist-electron/main.js",
   "author": "PixelCodeGH",
@@ -72,6 +72,7 @@
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-markdown": "^10.1.0",
+    "rehype-raw": "^7.0.0",
     "remark-gfm": "^4.0.1"
   }
 }

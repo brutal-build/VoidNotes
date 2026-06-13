@@ -1,6 +1,7 @@
 import React, { useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import rehypeRaw from "rehype-raw";
 import { extractCodeFences, restoreCodeFences } from "../plugins/code-fence";
 import { processCallouts } from "../plugins/callouts";
 import { processEscapes } from "../plugins/escape";
@@ -10,10 +11,11 @@ import { processWikiLinks } from "../plugins/wiki-links";
 
 interface NoteParserProps {
   content: string;
+  noteNames?: string[];
   onWikiLinkClick?: (target: string) => void;
 }
 
-export default function NoteParser({ content, onWikiLinkClick }: NoteParserProps) {
+export default function NoteParser({ content, noteNames, onWikiLinkClick }: NoteParserProps) {
   const processed = useMemo(() => {
     const { protected: safe, fences } = extractCodeFences(content);
 
@@ -29,6 +31,19 @@ export default function NoteParser({ content, onWikiLinkClick }: NoteParserProps
     return text;
   }, [content]);
 
+  const processedWithStatus = useMemo(() => {
+    if (!noteNames || noteNames.length === 0) return processed;
+    return processed.replace(
+      /<a class="wiki-link" data-target="([^"]+)"[^>]*>([^<]*)<\/a>/g,
+      (_match: string, target: string, display: string) => {
+        const normalized = target.endsWith(".md") ? target : `${target}.md`;
+        const exists = noteNames.includes(normalized);
+        const className = exists ? "wiki-link" : "wiki-link-missing";
+        return `<a class="${className}" data-target="${target}">${display}</a>`;
+      }
+    );
+  }, [processed, noteNames]);
+
   return (
     <div className="pane-preview visible">
       <div className="preview-wrapper">
@@ -39,10 +54,15 @@ export default function NoteParser({ content, onWikiLinkClick }: NoteParserProps
             if (target && onWikiLinkClick) {
               onWikiLinkClick(target.getAttribute("data-target") || "");
             }
+
+            const spoiler = (e.target as HTMLElement).closest("[data-spoiler]");
+            if (spoiler) {
+              spoiler.classList.toggle("revealed");
+            }
           }}
         >
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>
-            {processed}
+          <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
+            {processedWithStatus}
           </ReactMarkdown>
         </div>
       </div>

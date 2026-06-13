@@ -770,6 +770,18 @@ html, body, #root {
   border-bottom-color: var(--text-primary);
 }
 
+.wiki-link-missing {
+  color: var(--text-faint);
+  border-bottom: 1px dashed var(--text-faint);
+  opacity: 0.7;
+}
+
+.wiki-link-missing:hover {
+  color: var(--text-secondary);
+  border-bottom-color: var(--text-secondary);
+  opacity: 1;
+}
+
 /* --- Highlight ==text== --- */
 .md-highlight {
   background: rgba(138, 112, 214, 0.2);

@@ -18,9 +18,11 @@ export function processUnderline(text: string): string {
 }
 
 export function processSpoilers(text: string): string {
-  // ||tekst|| → spoiler
+  // ||tekst|| → spoiler (obsługa kliku w NoteParser)
+  // Przed wywołaniem tego pliku escape już nie zamienia '|' na &#124;,
+  // więc zwykłe || przechodzi bez przeszkód.
   return text.replace(
     /\|\|(.+?)\|\|/g,
-    '<span class="spoiler-hidden" onclick="this.classList.toggle(\'revealed\')">$1</span>'
+    '<span class="spoiler-hidden" data-spoiler>$1</span>'
   );
 }

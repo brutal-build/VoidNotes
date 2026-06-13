@@ -226,7 +226,7 @@ export default function App() {
             </div>
           )}
           {previewMode && activeNote && (
-            <NoteParser content={rawContent} onWikiLinkClick={handleWikiLinkClick} />
+            <NoteParser content={rawContent} noteNames={notes} onWikiLinkClick={handleWikiLinkClick} />
           )}
         </div>
 

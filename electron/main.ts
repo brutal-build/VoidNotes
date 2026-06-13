@@ -12,6 +12,7 @@ function createWindow(): void {
     backgroundColor: "#1e1e1e",
     frame: false,
     titleBarStyle: "hidden",
+    icon: path.join(__dirname, "..", "icon.ico"),
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,

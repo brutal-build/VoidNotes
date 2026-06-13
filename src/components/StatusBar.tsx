@@ -35,6 +35,7 @@ export default function StatusBar({ content, noteCount, activeNote, saved }: Sta
         )}
       </div>
       <div className="status-bar-section">
+        <span className="status-item">Void Notes 0.2.5</span>
         <span className="status-item">Ctrl+P Search</span>
         <span className="status-item">Ctrl+E Preview</span>
       </div>
