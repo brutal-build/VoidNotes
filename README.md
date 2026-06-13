@@ -38,27 +38,11 @@ A minimalist, brutalist-styled Markdown **second-brain** notepad built with Elec
 
 - **Node.js** v18 or later — https://nodejs.org
 
-### Install & Run
+### Install
 
-```bash
-# Clone the repo
-git clone https://github.com/PixelCodeGH/VoidNotes.git
-cd VoidNotes
+- **Windows**: download the installer from the [Releases](https://github.com/PixelCodeGH/VoidNotes/releases) page.
 
-# Install dependencies
-npm install
-
-# Build the project
-npm run build
-
-# Start the app
-npm start
-```
-
-Or use the one-click scripts:
-
-- **Windows**: double-click `setup.bat`
-- **Linux / macOS**: `chmod +x setup.sh && ./setup.sh`
+**Note:** `setup.bat` and `setup.sh` are developer setup scripts and are not intended for end users.
 
 ### Development
 

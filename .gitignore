@@ -5,29 +5,9 @@ node_modules/
 dist/
 dist-electron/
 
-# Environment
-.env
-.env.local
-.env.*.local
-
-# OS
-.DS_Store
-Thumbs.db
-desktop.ini
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# Logs
-*.log
-npm-debug.log*
-
-# Electron
-out/
+# Installer / release artifacts
 release/
 
-# Vite
-*.local
+# IDE / system junk
+.DS_Store
+Thumbs.db

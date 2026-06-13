@@ -3,6 +3,8 @@ import React, { useState, useMemo } from "react";
 interface SidebarProps {
   notes: string[];
   activeNote: string | null;
+  focusMode: boolean;
+  onToggleFocusMode: () => void;
   onSelect: (fileName: string) => void;
   onNew: () => void;
   onDelete: (fileName: string) => void;
@@ -103,16 +105,17 @@ function FolderView({ node, activeNote, onSelect, onDelete, depth = 0 }: {
   );
 }
 
-export default function Sidebar({ notes, activeNote, onSelect, onNew, onDelete, onOpenSearch, onOpenSettings, onOpenHelp }: SidebarProps) {
+export default function Sidebar({ notes, activeNote, focusMode, onToggleFocusMode, onSelect, onNew, onDelete, onOpenSearch, onOpenSettings, onOpenHelp }: SidebarProps) {
   const tree = useMemo(() => buildTree(notes), [notes]);
 
   return (
-    <div className="sidebar">
+    <div className={`sidebar${focusMode ? " sidebar-focus" : ""}`}>
       <div className="sidebar-header">
         <span className="sidebar-title">Vault</span>
         <div className="sidebar-actions">
           <button className="btn-icon" onClick={onOpenSearch}>&#128269;</button>
           <button className="btn-icon" onClick={onNew}>&#43;</button>
+          <button className={`btn-icon${focusMode ? " active" : ""}`} onClick={onToggleFocusMode} title="Toggle focus mode">&#9728;</button>
         </div>
       </div>
       <div className="file-tree">

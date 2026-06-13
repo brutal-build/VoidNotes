@@ -24,6 +24,7 @@ export default function App() {
   const [showHelp, setShowHelp] = useState(false);
   const [saved, setSaved] = useState(true);
   const [lastModified, setLastModified] = useState<string | null>(null);
+  const [focusMode, setFocusMode] = useState(false);
   const allContents = useRef<Map<string, string>>(new Map());
 
   const handleVaultSelect = useCallback(async (p: string) => {
@@ -68,6 +69,23 @@ export default function App() {
     if (!fileName) return;
     const files = await refreshNotes();
     await refreshBacklinks(files);
+    await openNote(fileName);
+  }, [refreshNotes, refreshBacklinks, openNote]);
+
+  const handleDailyNote = useCallback(async () => {
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, "0");
+    const dd = String(today.getDate()).padStart(2, "0");
+    const fileName = `${yyyy}-${mm}-${dd}.md`;
+    const files = await refreshNotes();
+    if (files.includes(fileName)) {
+      await openNote(fileName);
+      return;
+    }
+    await window.electronAPI.createNote(fileName);
+    const newFiles = await refreshNotes();
+    await refreshBacklinks(newFiles);
     await openNote(fileName);
   }, [refreshNotes, refreshBacklinks, openNote]);
 
@@ -143,8 +161,10 @@ export default function App() {
       if (e.ctrlKey && e.key === "p") { e.preventDefault(); setShowSearch((v) => !v); }
       if (e.ctrlKey && e.key === "s") { e.preventDefault(); handleManualSave(); }
       if (e.ctrlKey && e.key === "n") { e.preventDefault(); handleNewNote(); }
+      if (e.ctrlKey && e.shiftKey && e.key === "N") { e.preventDefault(); handleDailyNote(); }
       if (e.ctrlKey && e.key === ",") { e.preventDefault(); setShowSettings((v) => !v); }
       if (e.key === "F1") { e.preventDefault(); setShowHelp((v) => !v); }
+      if (e.key === "F9") { e.preventDefault(); setFocusMode((v) => !v); }
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
@@ -163,6 +183,8 @@ export default function App() {
       <Sidebar
         notes={notes}
         activeNote={activeNote}
+        focusMode={focusMode}
+        onToggleFocusMode={() => setFocusMode((v) => !v)}
         onSelect={openNote}
         onNew={handleNewNote}
         onDelete={handleDeleteNote}
