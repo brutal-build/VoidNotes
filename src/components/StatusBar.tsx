@@ -1,4 +1,5 @@
 import React, { useMemo } from "react";
+import { APP_VERSION } from "../plugins/updater";
 
 interface StatusBarProps {
   content: string;
@@ -35,7 +36,7 @@ export default function StatusBar({ content, noteCount, activeNote, saved }: Sta
         )}
       </div>
       <div className="status-bar-section">
-        <span className="status-item">Void Notes 0.2.5</span>
+        <span className="status-item">Void Notes {APP_VERSION}</span>
         <span className="status-item">Ctrl+P Search</span>
         <span className="status-item">Ctrl+E Preview</span>
       </div>

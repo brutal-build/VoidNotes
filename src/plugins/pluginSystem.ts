@@ -1,6 +1,7 @@
 import { Extension } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import { ReactNode } from "react";
+import { APP_VERSION } from "./updater";
 import {
   VoidPlugin, VoidAPI, CommandEntry, SidebarPanel,
   ToolbarButton, StatusBarItem, EventBus, EditorAPI, NoteAPI, VaultAPI,
@@ -193,7 +194,7 @@ export class PluginSystem {
       events: this.eventBus,
       app: {
         getTheme: () => this.theme,
-        getVersion: () => "0.2.5",
+        getVersion: () => APP_VERSION,
       },
     };
   }
