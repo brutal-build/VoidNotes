@@ -40,7 +40,7 @@
           ]
         }
       ],
-      "icon": null
+      "icon": "icon.ico"
     },
     "nsis": {
       "oneClick": false,
