@@ -1,4 +1,4 @@
-export const APP_VERSION = "0.4.1";
+export const APP_VERSION = "1.0.0";
 export const GITHUB_REPO = "PixelCodeGH/VoidNotes";
 const GITHUB_API = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
 
