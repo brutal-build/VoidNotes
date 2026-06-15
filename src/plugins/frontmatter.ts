@@ -50,3 +50,33 @@ export function buildBacklinks(allNotes: Map<string, string>): Map<string, strin
 
   return backlinks;
 }
+
+export function extractInlineTags(content: string): string[] {
+  const regex = /(?<=^|\s)#([a-zA-Z0-9_-]+)/g;
+  const tags: string[] = [];
+  let match;
+  while ((match = regex.exec(content)) !== null) {
+    tags.push(match[1].toLowerCase());
+  }
+  return tags;
+}
+
+export function buildTagIndex(allNotes: Map<string, string>): Map<string, string[]> {
+  const tagIndex = new Map<string, string[]>();
+
+  for (const [fileName, raw] of allNotes) {
+    const { data, content } = parseFrontmatter(raw);
+    const frontTags = (data.tags || []).map((t: string) => t.toLowerCase());
+    const inlineTags = extractInlineTags(content);
+    const allTags = [...new Set([...frontTags, ...inlineTags])];
+
+    for (const tag of allTags) {
+      if (!tagIndex.has(tag)) {
+        tagIndex.set(tag, []);
+      }
+      tagIndex.get(tag)!.push(fileName);
+    }
+  }
+
+  return tagIndex;
+}

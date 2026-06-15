@@ -5,11 +5,13 @@ import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { bracketMatching, indentOnInput } from "@codemirror/language";
 import { highlightSelectionMatches, searchKeymap } from "@codemirror/search";
 import { autocompletion, CompletionContext, CompletionResult } from "@codemirror/autocomplete";
+import { vim } from "@replit/codemirror-vim";
 
 interface NoteEditorProps {
   content: string;
   onChange: (value: string) => void;
   noteNames: string[];
+  vimMode?: boolean;
 }
 
 function wikiLinkCompletion(noteNames: string[]) {
@@ -50,12 +52,12 @@ const brutalTheme = EditorView.theme({
     backgroundColor: "var(--accent-muted)",
   },
   ".cm-gutters": {
-    backgroundColor: "transparent",
+    backgroundColor: "var(--bg-primary)",
     color: "var(--text-faint)",
     border: "none",
   },
   ".cm-activeLineGutter": {
-    backgroundColor: "transparent",
+    backgroundColor: "var(--bg-hover)",
     color: "var(--text-muted)",
   },
   ".cm-activeLine": {
@@ -68,9 +70,30 @@ const brutalTheme = EditorView.theme({
   ".cm-foldGutter": {
     color: "var(--text-faint)",
   },
-}, { dark: true });
+  ".cm-tooltip": {
+    backgroundColor: "var(--bg-elevated)",
+    border: "1px solid var(--border)",
+    color: "var(--text-primary)",
+  },
+  ".cm-tooltip-autocomplete": {
+    "& > ul > li[aria-selected]": {
+      backgroundColor: "var(--accent-muted)",
+      color: "var(--text-primary)",
+    },
+  },
+  ".cm-panels": {
+    backgroundColor: "var(--bg-secondary)",
+    color: "var(--text-primary)",
+  },
+  ".cm-searchMatch": {
+    backgroundColor: "var(--accent-muted)",
+  },
+  ".cm-searchMatch.cm-searchMatch-selected": {
+    backgroundColor: "var(--accent-muted)",
+  },
+}, { dark: false });
 
-export default function NoteEditor({ content, onChange, noteNames }: NoteEditorProps) {
+export default function NoteEditor({ content, onChange, noteNames, vimMode }: NoteEditorProps) {
   const wikiCompletion = useMemo(
     () => autocompletion({
       override: [wikiLinkCompletion(noteNames)],
@@ -79,19 +102,25 @@ export default function NoteEditor({ content, onChange, noteNames }: NoteEditorP
     [noteNames]
   );
 
-  const extensions = useMemo(() => [
-    lineNumbers(),
-    highlightActiveLine(),
-    highlightActiveLineGutter(),
-    history(),
-    bracketMatching(),
-    indentOnInput(),
-    highlightSelectionMatches(),
-    keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap]),
-    brutalTheme,
-    EditorView.lineWrapping,
-    wikiCompletion,
-  ], [wikiCompletion]);
+  const extensions = useMemo(() => {
+    const exts = [
+      lineNumbers(),
+      highlightActiveLine(),
+      highlightActiveLineGutter(),
+      history(),
+      bracketMatching(),
+      indentOnInput(),
+      highlightSelectionMatches(),
+      keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap]),
+      brutalTheme,
+      EditorView.lineWrapping,
+      wikiCompletion,
+    ];
+    if (vimMode) {
+      exts.unshift(vim());
+    }
+    return exts;
+  }, [wikiCompletion, vimMode]);
 
   const handleChange = useCallback((value: string) => {
     onChange(value);

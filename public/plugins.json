@@ -1,0 +1,32 @@
+[
+  {
+    "id": "word-count",
+    "name": "Word Count",
+    "version": "1.0.0",
+    "description": "Shows word/char/line counts and adds utility commands",
+    "author": "Void Notes",
+    "repoUrl": "https://github.com/brutal-build/VoidNotes",
+    "scriptUrl": "https://raw.githubusercontent.com/brutal-build/VoidNotes/main/plugins/word-count.js",
+    "tags": ["productivity", "stats"]
+  },
+  {
+    "id": "text-snippets",
+    "name": "Text Snippets",
+    "version": "1.0.0",
+    "description": "Quick insert common markdown patterns (tables, callouts, code blocks)",
+    "author": "Void Notes",
+    "repoUrl": "https://github.com/brutal-build/VoidNotes",
+    "scriptUrl": "https://raw.githubusercontent.com/brutal-build/VoidNotes/main/plugins/text-snippets.js",
+    "tags": ["productivity", "markdown"]
+  },
+  {
+    "id": "auto-format",
+    "name": "Auto Format",
+    "version": "1.0.0",
+    "description": "Trims trailing whitespace and fixes spacing on save",
+    "author": "Void Notes",
+    "repoUrl": "https://github.com/brutal-build/VoidNotes",
+    "scriptUrl": "https://raw.githubusercontent.com/brutal-build/VoidNotes/main/plugins/auto-format.js",
+    "tags": ["formatting", "automation"]
+  }
+]

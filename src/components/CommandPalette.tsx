@@ -6,6 +6,8 @@ interface CommandPaletteProps {
   onClose: () => void;
 }
 
+type PaletteItem = { type: "note"; value: string };
+
 function fuzzyMatch(query: string, text: string): boolean {
   const q = query.toLowerCase();
   const t = text.toLowerCase();
@@ -21,9 +23,12 @@ export default function CommandPalette({ notes, onSelect, onClose }: CommandPale
   const [selected, setSelected] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const filtered = useMemo(() => {
-    if (!query.trim()) return notes;
-    return notes.filter((n) => fuzzyMatch(query, n.replace(/\.md$/, "")));
+  const filtered = useMemo<PaletteItem[]>(() => {
+    const q = query.trim();
+    const noteItems: PaletteItem[] = notes
+      .filter((n) => !q || fuzzyMatch(q, n.replace(/\.md$/, "")))
+      .map((n) => ({ type: "note" as const, value: n }));
+    return noteItems;
   }, [notes, query]);
 
   useEffect(() => {
@@ -44,8 +49,13 @@ export default function CommandPalette({ notes, onSelect, onClose }: CommandPale
       e.preventDefault();
       setSelected((prev) => Math.max(prev - 1, 0));
     } else if (e.key === "Enter" && filtered.length > 0) {
-      onSelect(filtered[selected]);
+      const item = filtered[selected];
+      onSelect(item.value);
     }
+  };
+
+  const handleClick = (item: PaletteItem) => {
+    onSelect(item.value);
   };
 
   return (
@@ -62,23 +72,23 @@ export default function CommandPalette({ notes, onSelect, onClose }: CommandPale
         <div className="command-palette-list">
           {filtered.length === 0 && (
             <div className="command-palette-item" style={{ color: "var(--text-faint)" }}>
-              No notes found
+              No results found
             </div>
           )}
-          {filtered.map((file, i) => (
+          {filtered.map((item, i) => (
             <div
-              key={file}
+              key={`note-${item.value}`}
               className={`command-palette-item ${i === selected ? "selected" : ""}`}
-              onClick={() => onSelect(file)}
+              onClick={() => handleClick(item)}
               onMouseEnter={() => setSelected(i)}
             >
-              <span className="command-palette-item-icon">&#128196;</span>
+              <span className="command-palette-item-icon">📄</span>
               <span className="command-palette-item-name">
-                {file.split("/").pop()?.replace(/\.md$/, "") || file}
+                {item.value.split("/").pop()?.replace(/\.md$/, "") || item.value}
               </span>
-              {file.includes("/") && (
+              {item.value.includes("/") && (
                 <span className="command-palette-item-path">
-                  {file.substring(0, file.lastIndexOf("/"))}
+                  {item.value.substring(0, item.value.lastIndexOf("/"))}
                 </span>
               )}
             </div>
