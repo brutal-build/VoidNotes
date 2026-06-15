@@ -16,6 +16,7 @@ import GraphView from "./GraphView";
 import GlobalSearch from "./GlobalSearch";
 import TemplatesPanel from "./TemplatesPanel";
 import BookmarksPanel from "./BookmarksPanel";
+import CanvasView from "./CanvasView";
 import { parseFrontmatter, buildBacklinks, buildTagIndex } from "../plugins/frontmatter";
 
 const THEME_BG: Record<ThemeName, string> = {
@@ -70,6 +71,12 @@ export default function App() {
     return stored ? JSON.parse(stored) : [];
   });
   const [showBookmarks, setShowBookmarks] = useState(false);
+  const [showCanvas, setShowCanvas] = useState(false);
+
+  // Editor settings
+  const [readableLineLength, setReadableLineLength] = useState(() => localStorage.getItem("void-readable-line") === "true");
+  const [editorFont, setEditorFont] = useState(() => localStorage.getItem("void-editor-font") || "Cascadia Code, Fira Code, JetBrains Mono, Consolas, monospace");
+  const [spellcheck, setSpellcheck] = useState(() => localStorage.getItem("void-spellcheck") !== "false");
 
   const activeNoteRef = useRef(activeNote);
   const rawContentRef = useRef(rawContent);
@@ -335,7 +342,7 @@ export default function App() {
 
   return (
     <div className="app">
-      {!focusMode && <LeftRibbon onNewNote={handleNewNote} onNewFolder={handleNewFolder} onOpenGraph={() => setShowGraph(!showGraph)} onDailyNote={handleDailyNote} onOpenTemplates={() => setShowTemplates(true)} onOpenBookmarks={() => setShowBookmarks(true)} onOpenSettings={() => setShowSettings(true)} onOpenSearch={() => setShowSearch(true)} activePanel={showGraph ? "graph" : showTemplates ? "templates" : showBookmarks ? "bookmarks" : null} />}
+      {!focusMode && <LeftRibbon onNewNote={handleNewNote} onNewFolder={handleNewFolder} onOpenGraph={() => setShowGraph(!showGraph)} onDailyNote={handleDailyNote} onOpenTemplates={() => setShowTemplates(true)} onOpenBookmarks={() => setShowBookmarks(true)} onOpenCanvas={() => setShowCanvas(true)} onOpenSettings={() => setShowSettings(true)} onOpenSearch={() => setShowSearch(true)} activePanel={showGraph ? "graph" : showTemplates ? "templates" : showBookmarks ? "bookmarks" : showCanvas ? "canvas" : null} />}
       {!focusMode && (
         <ResizablePanel side="left" defaultWidth={240} minWidth={180} maxWidth={400} storageKey="void-sidebar-width">
           <Sidebar notes={filteredNotes} allNotes={notes} activeNote={activeNote} focusMode={focusMode} vaultPath={vaultPath} tags={sortedTags} selectedTags={selectedTags} bookmarks={bookmarks} onToggleTag={toggleTag} onToggleFocusMode={() => setFocusMode((v) => !v)} onSelect={openNote} onNew={handleNewNote} onDelete={handleDeleteNote} onRename={handleRenameNote} onToggleBookmark={toggleBookmark} onOpenSearch={() => setShowSearch(true)} onOpenSettings={() => setShowSettings(true)} onOpenHelp={() => setShowHelp(true)} />
@@ -365,14 +372,14 @@ export default function App() {
             {splitView && activeNote ? (
               <>
                 <div className="pane-editor pane-enter" style={{ flex: `0 0 ${splitRatio * 100}%` }}>
-                  <div className="editor-wrapper"><NoteEditor content={rawContent} onChange={handleContentChange} noteNames={notes} vimMode={vimMode} /></div>
+                  <div className="editor-wrapper"><NoteEditor content={rawContent} onChange={handleContentChange} noteNames={notes} vimMode={vimMode} readableLineLength={readableLineLength} editorFont={editorFont} /></div>
                 </div>
                 <div className="split-divider" onMouseDown={handleSplitMouseDown} style={{ cursor: "col-resize" }} />
                 <NoteParser content={rawContent} noteNames={notes} className="pane-preview" style={{ flex: `0 0 ${(1 - splitRatio) * 100}%` }} onWikiLinkClick={handleWikiLinkClick} />
               </>
             ) : (
               <>
-                {!previewMode && activeNote && <div className="pane-editor pane-enter"><div className="editor-wrapper"><NoteEditor content={rawContent} onChange={handleContentChange} noteNames={notes} vimMode={vimMode} /></div></div>}
+                {!previewMode && activeNote && <div className="pane-editor pane-enter"><div className="editor-wrapper"><NoteEditor content={rawContent} onChange={handleContentChange} noteNames={notes} vimMode={vimMode} readableLineLength={readableLineLength} editorFont={editorFont} /></div></div>}
                 {previewMode && activeNote && <NoteParser content={rawContent} noteNames={notes} onWikiLinkClick={handleWikiLinkClick} />}
               </>
             )}
@@ -382,12 +389,27 @@ export default function App() {
         <StatusBar content={rawContent} noteCount={notes.length} activeNote={activeNote} saved={saved} />
       </div>
       {showSearch && <CommandPalette notes={notes} onSelect={(file) => { setShowSearch(false); openNote(file); }} onClose={() => setShowSearch(false)} />}
-      {showSettings && <Settings onClose={() => setShowSettings(false)} onSwitchVault={handleSwitchVault} theme={theme} onThemeChange={setTheme} vaultPath={vaultPath} vimMode={vimMode} onVimModeChange={(v) => { setVimMode(v); localStorage.setItem("void-vim-mode", String(v)); }} />}
+      {showSettings && <Settings
+        onClose={() => setShowSettings(false)}
+        onSwitchVault={handleSwitchVault}
+        theme={theme}
+        onThemeChange={setTheme}
+        vaultPath={vaultPath}
+        vimMode={vimMode}
+        onVimModeChange={(v) => { setVimMode(v); localStorage.setItem("void-vim-mode", String(v)); }}
+        readableLineLength={readableLineLength}
+        onReadableLineLengthChange={(v) => { setReadableLineLength(v); localStorage.setItem("void-readable-line", String(v)); }}
+        editorFont={editorFont}
+        onEditorFontChange={(f) => { setEditorFont(f); localStorage.setItem("void-editor-font", f); }}
+        spellcheck={spellcheck}
+        onSpellcheckChange={(v) => { setSpellcheck(v); localStorage.setItem("void-spellcheck", String(v)); }}
+      />}
       {showHelp && <Help onClose={() => setShowHelp(false)} />}
       {showGraph && <GraphView notes={notes} backlinks={backlinks} activeNote={activeNote} onNodeClick={(note) => { setShowGraph(false); openNote(note); }} onClose={() => setShowGraph(false)} />}
       {showGlobalSearch && <GlobalSearch notes={notes} contents={allContents.current} onSelect={(note) => { setShowGlobalSearch(false); openNote(note); }} onClose={() => setShowGlobalSearch(false)} />}
       {showTemplates && <TemplatesPanel onInsertTemplate={handleInsertTemplate} onClose={() => setShowTemplates(false)} />}
       {showBookmarks && <BookmarksPanel bookmarks={bookmarks} activeNote={activeNote} onToggleBookmark={toggleBookmark} onSelect={(note) => { setShowBookmarks(false); openNote(note); }} onClose={() => setShowBookmarks(false)} />}
+      {showCanvas && <CanvasView onClose={() => setShowCanvas(false)} />}
       {renamingFile && (
         <div className="modal-overlay" onClick={() => setRenamingFile(null)}>
           <div className="modal" style={{ width: 360 }} onClick={(e) => e.stopPropagation()}>

@@ -12,6 +12,8 @@ interface NoteEditorProps {
   onChange: (value: string) => void;
   noteNames: string[];
   vimMode?: boolean;
+  readableLineLength?: boolean;
+  editorFont?: string;
 }
 
 function wikiLinkCompletion(noteNames: string[]) {
@@ -93,7 +95,7 @@ const brutalTheme = EditorView.theme({
   },
 }, { dark: false });
 
-export default function NoteEditor({ content, onChange, noteNames, vimMode }: NoteEditorProps) {
+export default function NoteEditor({ content, onChange, noteNames, vimMode, readableLineLength, editorFont }: NoteEditorProps) {
   const wikiCompletion = useMemo(
     () => autocompletion({
       override: [wikiLinkCompletion(noteNames)],
@@ -101,6 +103,31 @@ export default function NoteEditor({ content, onChange, noteNames, vimMode }: No
     }),
     [noteNames]
   );
+
+  const dynamicTheme = useMemo(() => {
+    const styles: Record<string, any> = {
+      "&": {
+        backgroundColor: "transparent",
+        color: "var(--text-primary)",
+      },
+      ".cm-content": {
+        caretColor: "var(--accent)",
+        fontFamily: editorFont || "var(--font-mono)",
+        fontSize: "var(--font-size-md)",
+        lineHeight: "var(--line-height)",
+      },
+    };
+
+    if (readableLineLength) {
+      styles[".cm-content"] = {
+        ...styles[".cm-content"],
+        maxWidth: "80ch",
+        margin: "0 auto",
+      };
+    }
+
+    return EditorView.theme(styles, { dark: false });
+  }, [readableLineLength, editorFont]);
 
   const extensions = useMemo(() => {
     const exts = [
@@ -112,7 +139,7 @@ export default function NoteEditor({ content, onChange, noteNames, vimMode }: No
       indentOnInput(),
       highlightSelectionMatches(),
       keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap]),
-      brutalTheme,
+      dynamicTheme,
       EditorView.lineWrapping,
       wikiCompletion,
     ];
@@ -120,7 +147,7 @@ export default function NoteEditor({ content, onChange, noteNames, vimMode }: No
       exts.unshift(vim());
     }
     return exts;
-  }, [wikiCompletion, vimMode]);
+  }, [wikiCompletion, vimMode, dynamicTheme]);
 
   const handleChange = useCallback((value: string) => {
     onChange(value);
