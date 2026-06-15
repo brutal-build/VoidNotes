@@ -17,12 +17,10 @@ interface TabBarProps {
 export default function TabBar({ tabs, activeTab, onSelect, onClose, onReorder }: TabBarProps) {
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
 
   const handleDragStart = useCallback((e: React.DragEvent, index: number) => {
     setDragIndex(index);
     e.dataTransfer.effectAllowed = "move";
-    e.dataTransfer.setData("text/plain", index.toString());
   }, []);
 
   const handleDragOver = useCallback((e: React.DragEvent, index: number) => {
@@ -46,7 +44,7 @@ export default function TabBar({ tabs, activeTab, onSelect, onClose, onReorder }
   }, []);
 
   return (
-    <div className="tab-bar" ref={containerRef}>
+    <div className="tab-bar">
       {tabs.map((tab, index) => (
         <div
           key={tab.id}
@@ -62,14 +60,9 @@ export default function TabBar({ tabs, activeTab, onSelect, onClose, onReorder }
             {tab.dirty && <span className="tab-dirty">&#8226;</span>}
             {tab.label}
           </span>
-          <button
-            className="tab-close"
-            onClick={(e) => { e.stopPropagation(); onClose(tab.id); }}
-            title="Close tab"
-          >
+          <button className="tab-close" onClick={(e) => { e.stopPropagation(); onClose(tab.id); }} title="Close tab">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18"/>
-              <line x1="6" y1="6" x2="18" y2="18"/>
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
             </svg>
           </button>
         </div>

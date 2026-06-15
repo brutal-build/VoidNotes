@@ -58,31 +58,19 @@ export default function App() {
   const allContents = useRef<Map<string, string>>(new Map());
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Tab system
   const [openTabs, setOpenTabs] = useState<Tab[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
-
-  // Right panel
   const [showRightPanel, setShowRightPanel] = useState(true);
   const [activePanelTab, setActivePanelTab] = useState<"backlinks" | "tags" | "outline">("backlinks");
-
-  // Graph view
   const [showGraph, setShowGraph] = useState(false);
-
-  // Global search
   const [showGlobalSearch, setShowGlobalSearch] = useState(false);
-
-  // Templates
   const [showTemplates, setShowTemplates] = useState(false);
-
-  // Bookmarks
   const [bookmarks, setBookmarks] = useState<string[]>(() => {
     const stored = localStorage.getItem("void-bookmarks");
     return stored ? JSON.parse(stored) : [];
   });
   const [showBookmarks, setShowBookmarks] = useState(false);
 
-  // --- Refs for stable closures ---
   const activeNoteRef = useRef(activeNote);
   const rawContentRef = useRef(rawContent);
   const notesRef = useRef(notes);
@@ -106,10 +94,7 @@ export default function App() {
 
   useEffect(() => {
     window.electronAPI.getVault().then((p) => {
-      if (p) {
-        setVaultPath(p);
-        setVaultReady(true);
-      }
+      if (p) { setVaultPath(p); setVaultReady(true); }
     });
   }, []);
 
@@ -120,12 +105,10 @@ export default function App() {
   }, []);
 
   const refreshBacklinks = useCallback(async (files: string[]) => {
-    const entries = await Promise.all(
-      files.map(async (file) => {
-        const content = await window.electronAPI.loadNote(file);
-        return [file, content] as const;
-      })
-    );
+    const entries = await Promise.all(files.map(async (file) => {
+      const content = await window.electronAPI.loadNote(file);
+      return [file, content] as const;
+    }));
     const contents = new Map<string, string>(entries);
     allContents.current = contents;
     setBacklinks(buildBacklinks(contents));
@@ -133,25 +116,18 @@ export default function App() {
   }, []);
 
   const toggleTag = useCallback((tag: string) => {
-    setSelectedTags((prev) =>
-      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
-    );
+    setSelectedTags((prev) => prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]);
   }, []);
 
   const filteredNotes = useMemo(() => {
     if (selectedTags.length === 0) return notes;
-    return notes.filter((file) =>
-      selectedTags.every((tag) => {
-        const files = tagIndex.current.get(tag);
-        return files && files.includes(file);
-      })
-    );
+    return notes.filter((file) => selectedTags.every((tag) => {
+      const files = tagIndex.current.get(tag);
+      return files && files.includes(file);
+    }));
   }, [notes, selectedTags]);
 
-  const sortedTags = useMemo(
-    () => Array.from(tagIndex.current.keys()).sort(),
-    [backlinks]
-  );
+  const sortedTags = useMemo(() => Array.from(tagIndex.current.keys()).sort(), [backlinks]);
 
   const openNote = useCallback(async (fileName: string) => {
     setActiveNote(fileName);
@@ -160,8 +136,6 @@ export default function App() {
     setRawContent(content);
     setPreviewMode(false);
     setSaved(true);
-
-    // Add to tabs if not already open
     setOpenTabs((prev) => {
       if (prev.some((t) => t.id === fileName)) return prev;
       const label = fileName.split("/").pop()?.replace(/\.md$/, "") || fileName;
@@ -177,21 +151,13 @@ export default function App() {
     await openNote(fileName);
   }, [refreshNotes, refreshBacklinks, openNote]);
 
-  const handleNewFolder = useCallback(async () => {
-    // Placeholder - will implement folder creation
-  }, []);
+  const handleNewFolder = useCallback(async () => {}, []);
 
   const handleDailyNote = useCallback(async () => {
     const today = new Date();
-    const yyyy = today.getFullYear();
-    const mm = String(today.getMonth() + 1).padStart(2, "0");
-    const dd = String(today.getDate()).padStart(2, "0");
-    const fileName = `${yyyy}-${mm}-${dd}.md`;
+    const fileName = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}.md`;
     const files = await refreshNotes();
-    if (files.includes(fileName)) {
-      await openNote(fileName);
-      return;
-    }
+    if (files.includes(fileName)) { await openNote(fileName); return; }
     await window.electronAPI.createNote(fileName);
     const newFiles = await refreshNotes();
     await refreshBacklinks(newFiles);
@@ -201,15 +167,9 @@ export default function App() {
   const handleDeleteNote = useCallback(async (fileName: string) => {
     const ok = await window.electronAPI.deleteNote(fileName);
     if (!ok) return;
-    if (activeNote === fileName) {
-      setActiveNote(null);
-      setRawContent("");
-    }
-    // Remove from tabs
+    if (activeNote === fileName) { setActiveNote(null); setRawContent(""); }
     setOpenTabs((prev) => prev.filter((t) => t.id !== fileName));
-    if (activeTabId === fileName) {
-      setActiveTabId(null);
-    }
+    if (activeTabId === fileName) setActiveTabId(null);
     const files = await refreshNotes();
     await refreshBacklinks(files);
   }, [activeNote, activeTabId, refreshNotes, refreshBacklinks]);
@@ -234,14 +194,9 @@ export default function App() {
   const handleContentChange = useCallback((value: string) => {
     setRawContent(value);
     setSaved(false);
-
-    // Mark tab as dirty
     if (activeNote) {
-      setOpenTabs((prev) =>
-        prev.map((t) => (t.id === activeNote ? { ...t, dirty: true } : t))
-      );
+      setOpenTabs((prev) => prev.map((t) => (t.id === activeNote ? { ...t, dirty: true } : t)));
     }
-
     if (!activeNote) return;
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(async () => {
@@ -250,11 +205,7 @@ export default function App() {
       allContents.current.set(activeNote, value);
       setBacklinks(buildBacklinks(allContents.current));
       tagIndex.current = buildTagIndex(allContents.current);
-
-      // Mark tab as clean after save
-      setOpenTabs((prev) =>
-        prev.map((t) => (t.id === activeNote ? { ...t, dirty: false } : t))
-      );
+      setOpenTabs((prev) => prev.map((t) => (t.id === activeNote ? { ...t, dirty: false } : t)));
     }, 500);
   }, [activeNote]);
 
@@ -269,11 +220,7 @@ export default function App() {
     allContents.current.set(activeNote, rawContent);
     setBacklinks(buildBacklinks(allContents.current));
     tagIndex.current = buildTagIndex(allContents.current);
-
-    // Mark tab as clean
-    setOpenTabs((prev) =>
-      prev.map((t) => (t.id === activeNote ? { ...t, dirty: false } : t))
-    );
+    setOpenTabs((prev) => prev.map((t) => (t.id === activeNote ? { ...t, dirty: false } : t)));
   }, [activeNote, rawContent]);
 
   useEffect(() => { handleManualSaveRef.current = handleManualSave; }, [handleManualSave]);
@@ -316,27 +263,17 @@ export default function App() {
 
   useEffect(() => {
     if (!splitDragging) return;
-
     const handleMouseMove = (e: MouseEvent) => {
       const container = document.querySelector(".pane-container");
       if (!container) return;
       const rect = container.getBoundingClientRect();
       const delta = e.clientX - splitStartX.current;
-      const newRatio = Math.min(0.9, Math.max(0.1, splitStartRatio.current + delta / rect.width));
-      setSplitRatio(newRatio);
+      setSplitRatio(Math.min(0.9, Math.max(0.1, splitStartRatio.current + delta / rect.width)));
     };
-
-    const handleMouseUp = () => {
-      setSplitDragging(false);
-      localStorage.setItem("void-split-ratio", String(splitRatio));
-    };
-
+    const handleMouseUp = () => { setSplitDragging(false); localStorage.setItem("void-split-ratio", String(splitRatio)); };
     document.addEventListener("mousemove", handleMouseMove);
     document.addEventListener("mouseup", handleMouseUp);
-    return () => {
-      document.removeEventListener("mousemove", handleMouseMove);
-      document.removeEventListener("mouseup", handleMouseUp);
-    };
+    return () => { document.removeEventListener("mousemove", handleMouseMove); document.removeEventListener("mouseup", handleMouseUp); };
   }, [splitDragging, splitRatio]);
 
   const handleSwitchVault = useCallback(async () => {
@@ -381,219 +318,76 @@ export default function App() {
 
   const noteBacklinks = activeNote ? (backlinks.get(activeNote) || []) : [];
 
-  // Tab handlers
-  const handleTabSelect = useCallback((id: string) => {
-    openNote(id);
-  }, [openNote]);
-
+  const handleTabSelect = useCallback((id: string) => { openNote(id); }, [openNote]);
   const handleTabClose = useCallback((id: string) => {
     setOpenTabs((prev) => prev.filter((t) => t.id !== id));
     if (activeTabId === id) {
       const remaining = openTabs.filter((t) => t.id !== id);
-      if (remaining.length > 0) {
-        openNote(remaining[remaining.length - 1].id);
-      } else {
-        setActiveNote(null);
-        setRawContent("");
-        setActiveTabId(null);
-      }
+      if (remaining.length > 0) openNote(remaining[remaining.length - 1].id);
+      else { setActiveNote(null); setRawContent(""); setActiveTabId(null); }
     }
   }, [activeTabId, openTabs, openNote]);
-
   const handleTabReorder = useCallback((fromIndex: number, toIndex: number) => {
-    setOpenTabs((prev) => {
-      const next = [...prev];
-      const [moved] = next.splice(fromIndex, 1);
-      next.splice(toIndex, 0, moved);
-      return next;
-    });
+    setOpenTabs((prev) => { const next = [...prev]; const [moved] = next.splice(fromIndex, 1); next.splice(toIndex, 0, moved); return next; });
   }, []);
 
-  if (!vaultReady) {
-    return <VaultSetup onVaultSelect={handleVaultSelect} />;
-  }
+  if (!vaultReady) return <VaultSetup onVaultSelect={handleVaultSelect} />;
 
   return (
     <div className="app">
-      {!focusMode && (
-        <LeftRibbon
-          onNewNote={handleNewNote}
-          onNewFolder={handleNewFolder}
-          onOpenGraph={() => setShowGraph(!showGraph)}
-          onDailyNote={handleDailyNote}
-          onOpenTemplates={() => setShowTemplates(true)}
-          onOpenBookmarks={() => setShowBookmarks(true)}
-          onOpenSettings={() => setShowSettings(true)}
-          onOpenSearch={() => setShowSearch(true)}
-          activePanel={showGraph ? "graph" : showTemplates ? "templates" : showBookmarks ? "bookmarks" : null}
-        />
-      )}
-
+      {!focusMode && <LeftRibbon onNewNote={handleNewNote} onNewFolder={handleNewFolder} onOpenGraph={() => setShowGraph(!showGraph)} onDailyNote={handleDailyNote} onOpenTemplates={() => setShowTemplates(true)} onOpenBookmarks={() => setShowBookmarks(true)} onOpenSettings={() => setShowSettings(true)} onOpenSearch={() => setShowSearch(true)} activePanel={showGraph ? "graph" : showTemplates ? "templates" : showBookmarks ? "bookmarks" : null} />}
       {!focusMode && (
         <ResizablePanel side="left" defaultWidth={240} minWidth={180} maxWidth={400} storageKey="void-sidebar-width">
-          <Sidebar
-            notes={filteredNotes}
-            allNotes={notes}
-            activeNote={activeNote}
-            focusMode={focusMode}
-            vaultPath={vaultPath}
-            tags={sortedTags}
-            selectedTags={selectedTags}
-            bookmarks={bookmarks}
-            onToggleTag={toggleTag}
-            onToggleFocusMode={() => setFocusMode((v) => !v)}
-            onSelect={openNote}
-            onNew={handleNewNote}
-            onDelete={handleDeleteNote}
-            onRename={handleRenameNote}
-            onToggleBookmark={toggleBookmark}
-            onOpenSearch={() => setShowSearch(true)}
-            onOpenSettings={() => setShowSettings(true)}
-            onOpenHelp={() => setShowHelp(true)}
-          />
+          <Sidebar notes={filteredNotes} allNotes={notes} activeNote={activeNote} focusMode={focusMode} vaultPath={vaultPath} tags={sortedTags} selectedTags={selectedTags} bookmarks={bookmarks} onToggleTag={toggleTag} onToggleFocusMode={() => setFocusMode((v) => !v)} onSelect={openNote} onNew={handleNewNote} onDelete={handleDeleteNote} onRename={handleRenameNote} onToggleBookmark={toggleBookmark} onOpenSearch={() => setShowSearch(true)} onOpenSettings={() => setShowSettings(true)} onOpenHelp={() => setShowHelp(true)} />
         </ResizablePanel>
       )}
-
       {focusMode && (
         <button className="focus-restore-btn" onClick={() => setFocusMode(false)} title="Show sidebar (F9)">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="3" y1="12" x2="21" y2="12"/>
-            <line x1="3" y1="6" x2="21" y2="6"/>
-            <line x1="3" y1="18" x2="21" y2="18"/>
-          </svg>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
         </button>
       )}
-
       <div className="editor-area">
-        {!focusMode && openTabs.length > 0 && (
-          <TabBar
-            tabs={openTabs}
-            activeTab={activeTabId}
-            onSelect={handleTabSelect}
-            onClose={handleTabClose}
-            onReorder={handleTabReorder}
-          />
-        )}
-
+        {!focusMode && openTabs.length > 0 && <TabBar tabs={openTabs} activeTab={activeTabId} onSelect={handleTabSelect} onClose={handleTabClose} onReorder={handleTabReorder} />}
         <div className="top-bar">
           <div className="top-bar-left">
-            <div className="breadcrumb">
-              {activeNote ? (
-                <span className="breadcrumb-current">
-                  {activeNote.split("/").pop()?.replace(/\.md$/, "") || ""}
-                </span>
-              ) : (
-                <span>No note open</span>
-              )}
-            </div>
+            <div className="breadcrumb">{activeNote ? <span className="breadcrumb-current">{activeNote.split("/").pop()?.replace(/\.md$/, "") || ""}</span> : <span>No note open</span>}</div>
           </div>
           <div className="top-bar-actions">
-            <button className={`btn-mode ${!splitView ? "active" : ""}`} onClick={() => { setPreviewMode((v) => !v); setSplitView(false); }}>
-              {previewMode ? "Edit" : "Preview"}
-            </button>
-            <button className={`btn-mode ${splitView ? "active" : ""}`} onClick={toggleSplitView} title="Split view (Ctrl+Shift+E)">
-              Split
-            </button>
-            <button
-              className={`btn-mode ${showRightPanel ? "active" : ""}`}
-              onClick={() => setShowRightPanel((v) => !v)}
-              title="Toggle right panel"
-            >
-              Panel
-            </button>
+            <button className={`btn-mode ${!splitView ? "active" : ""}`} onClick={() => { setPreviewMode((v) => !v); setSplitView(false); }}>{previewMode ? "Edit" : "Preview"}</button>
+            <button className={`btn-mode ${splitView ? "active" : ""}`} onClick={toggleSplitView} title="Split view (Ctrl+Shift+E)">Split</button>
+            <button className={`btn-mode ${showRightPanel ? "active" : ""}`} onClick={() => setShowRightPanel((v) => !v)} title="Toggle right panel">Panel</button>
             <div className="top-bar-separator" />
             <TrafficLights />
           </div>
         </div>
-
         <div className="main-content">
-          <div className={`pane-container ${splitView ? "split-view" : ""}`} style={{ "--split-ratio": splitRatio } as React.CSSProperties}>
+          <div className={`pane-container ${splitView ? "split-view" : ""}`}>
             {splitView && activeNote ? (
               <>
-                <div className="pane-editor pane-enter" style={{ flex: `0 0 ${splitRatio * 100}%` } as React.CSSProperties}>
-                  <div className="editor-wrapper">
-                    <NoteEditor content={rawContent} onChange={handleContentChange} noteNames={notes} vimMode={vimMode} />
-                  </div>
+                <div className="pane-editor pane-enter" style={{ flex: `0 0 ${splitRatio * 100}%` }}>
+                  <div className="editor-wrapper"><NoteEditor content={rawContent} onChange={handleContentChange} noteNames={notes} vimMode={vimMode} /></div>
                 </div>
-                <div
-                  className="split-divider"
-                  onMouseDown={handleSplitMouseDown}
-                  style={{ cursor: "col-resize" } as React.CSSProperties}
-                />
-                <NoteParser content={rawContent} noteNames={notes} className="pane-preview" style={{ flex: `0 0 ${(1 - splitRatio) * 100}%` } as React.CSSProperties} onWikiLinkClick={handleWikiLinkClick} />
+                <div className="split-divider" onMouseDown={handleSplitMouseDown} style={{ cursor: "col-resize" }} />
+                <NoteParser content={rawContent} noteNames={notes} className="pane-preview" style={{ flex: `0 0 ${(1 - splitRatio) * 100}%` }} onWikiLinkClick={handleWikiLinkClick} />
               </>
             ) : (
               <>
-                {!previewMode && activeNote && (
-                  <div className="pane-editor pane-enter">
-                    <div className="editor-wrapper">
-                      <NoteEditor content={rawContent} onChange={handleContentChange} noteNames={notes} vimMode={vimMode} />
-                    </div>
-                  </div>
-                )}
-                {previewMode && activeNote && (
-                  <NoteParser content={rawContent} noteNames={notes} onWikiLinkClick={handleWikiLinkClick} />
-                )}
+                {!previewMode && activeNote && <div className="pane-editor pane-enter"><div className="editor-wrapper"><NoteEditor content={rawContent} onChange={handleContentChange} noteNames={notes} vimMode={vimMode} /></div></div>}
+                {previewMode && activeNote && <NoteParser content={rawContent} noteNames={notes} onWikiLinkClick={handleWikiLinkClick} />}
               </>
             )}
           </div>
-
-          {showRightPanel && activeNote && (
-            <RightPanel
-              activeNote={activeNote}
-              content={rawContent}
-              backlinks={noteBacklinks}
-              tags={sortedTags}
-              onNavigate={openNote}
-              activePanelTab={activePanelTab}
-              onPanelTabChange={setActivePanelTab}
-            />
-          )}
+          {showRightPanel && activeNote && <RightPanel activeNote={activeNote} content={rawContent} backlinks={noteBacklinks} tags={sortedTags} onNavigate={openNote} activePanelTab={activePanelTab} onPanelTabChange={setActivePanelTab} />}
         </div>
-
         <StatusBar content={rawContent} noteCount={notes.length} activeNote={activeNote} saved={saved} />
       </div>
-
-      {showSearch && (
-        <CommandPalette notes={notes} onSelect={(file) => { setShowSearch(false); openNote(file); }} onClose={() => setShowSearch(false)} />
-      )}
-      {showSettings && (
-        <Settings onClose={() => setShowSettings(false)} onSwitchVault={handleSwitchVault} theme={theme} onThemeChange={setTheme} vaultPath={vaultPath} vimMode={vimMode} onVimModeChange={(v) => { setVimMode(v); localStorage.setItem("void-vim-mode", String(v)); }} />
-      )}
+      {showSearch && <CommandPalette notes={notes} onSelect={(file) => { setShowSearch(false); openNote(file); }} onClose={() => setShowSearch(false)} />}
+      {showSettings && <Settings onClose={() => setShowSettings(false)} onSwitchVault={handleSwitchVault} theme={theme} onThemeChange={setTheme} vaultPath={vaultPath} vimMode={vimMode} onVimModeChange={(v) => { setVimMode(v); localStorage.setItem("void-vim-mode", String(v)); }} />}
       {showHelp && <Help onClose={() => setShowHelp(false)} />}
-      {showGraph && (
-        <GraphView
-          notes={notes}
-          backlinks={backlinks}
-          activeNote={activeNote}
-          onNodeClick={(note) => { setShowGraph(false); openNote(note); }}
-          onClose={() => setShowGraph(false)}
-        />
-      )}
-      {showGlobalSearch && (
-        <GlobalSearch
-          notes={notes}
-          contents={allContents.current}
-          onSelect={(note) => { setShowGlobalSearch(false); openNote(note); }}
-          onClose={() => setShowGlobalSearch(false)}
-        />
-      )}
-      {showTemplates && (
-        <TemplatesPanel
-          onInsertTemplate={handleInsertTemplate}
-          onClose={() => setShowTemplates(false)}
-        />
-      )}
-      {showBookmarks && (
-        <BookmarksPanel
-          bookmarks={bookmarks}
-          activeNote={activeNote}
-          onToggleBookmark={toggleBookmark}
-          onSelect={(note) => { setShowBookmarks(false); openNote(note); }}
-          onClose={() => setShowBookmarks(false)}
-        />
-      )}
-
+      {showGraph && <GraphView notes={notes} backlinks={backlinks} activeNote={activeNote} onNodeClick={(note) => { setShowGraph(false); openNote(note); }} onClose={() => setShowGraph(false)} />}
+      {showGlobalSearch && <GlobalSearch notes={notes} contents={allContents.current} onSelect={(note) => { setShowGlobalSearch(false); openNote(note); }} onClose={() => setShowGlobalSearch(false)} />}
+      {showTemplates && <TemplatesPanel onInsertTemplate={handleInsertTemplate} onClose={() => setShowTemplates(false)} />}
+      {showBookmarks && <BookmarksPanel bookmarks={bookmarks} activeNote={activeNote} onToggleBookmark={toggleBookmark} onSelect={(note) => { setShowBookmarks(false); openNote(note); }} onClose={() => setShowBookmarks(false)} />}
       {renamingFile && (
         <div className="modal-overlay" onClick={() => setRenamingFile(null)}>
           <div className="modal" style={{ width: 360 }} onClick={(e) => e.stopPropagation()}>
