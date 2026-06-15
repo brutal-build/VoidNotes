@@ -12,6 +12,8 @@ import ResizablePanel from "./ResizablePanel";
 import LeftRibbon from "./LeftRibbon";
 import TabBar, { Tab } from "./TabBar";
 import RightPanel from "./RightPanel";
+import GraphView from "./GraphView";
+import GlobalSearch from "./GlobalSearch";
 import { parseFrontmatter, buildBacklinks, buildTagIndex } from "../plugins/frontmatter";
 
 const THEME_BG: Record<ThemeName, string> = {
@@ -64,6 +66,9 @@ export default function App() {
 
   // Graph view placeholder
   const [showGraph, setShowGraph] = useState(false);
+
+  // Global search
+  const [showGlobalSearch, setShowGlobalSearch] = useState(false);
 
   // --- Refs for stable closures ---
   const activeNoteRef = useRef(activeNote);
@@ -337,6 +342,7 @@ export default function App() {
       if (e.ctrlKey && e.key === "e") { e.preventDefault(); togglePreview(); }
       if (e.ctrlKey && e.shiftKey && e.key === "E") { e.preventDefault(); toggleSplitView(); }
       if (e.ctrlKey && e.key === "p") { e.preventDefault(); setShowSearch((v) => !v); }
+      if (e.ctrlKey && e.shiftKey && e.key === "F") { e.preventDefault(); setShowGlobalSearch((v) => !v); }
       if (e.ctrlKey && e.key === "s") { e.preventDefault(); handleManualSaveRef.current(); }
       if (e.ctrlKey && e.key === "n") { e.preventDefault(); handleNewNoteRef.current(); }
       if (e.ctrlKey && e.shiftKey && e.key === "N") { e.preventDefault(); handleDailyNoteRef.current(); }
@@ -527,6 +533,23 @@ export default function App() {
         <Settings onClose={() => setShowSettings(false)} onSwitchVault={handleSwitchVault} theme={theme} onThemeChange={setTheme} vaultPath={vaultPath} vimMode={vimMode} onVimModeChange={(v) => { setVimMode(v); localStorage.setItem("void-vim-mode", String(v)); }} />
       )}
       {showHelp && <Help onClose={() => setShowHelp(false)} />}
+      {showGraph && (
+        <GraphView
+          notes={notes}
+          backlinks={backlinks}
+          activeNote={activeNote}
+          onNodeClick={(note) => { setShowGraph(false); openNote(note); }}
+          onClose={() => setShowGraph(false)}
+        />
+      )}
+      {showGlobalSearch && (
+        <GlobalSearch
+          notes={notes}
+          contents={allContents.current}
+          onSelect={(note) => { setShowGlobalSearch(false); openNote(note); }}
+          onClose={() => setShowGlobalSearch(false)}
+        />
+      )}
 
       {renamingFile && (
         <div className="modal-overlay" onClick={() => setRenamingFile(null)}>
