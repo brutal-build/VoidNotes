@@ -57,7 +57,6 @@ function createWindow(): void {
   });
 
   mainWindow.setIcon(appIcon);
-  mainWindow.webContents.openDevTools();
 }
 
 // --- Window controls ---
