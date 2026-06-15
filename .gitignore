@@ -11,3 +11,11 @@ release/
 # IDE / system junk
 .DS_Store
 Thumbs.db
+
+# Build scripts
+*.bat
+setup.sh
+
+# Old files
+todo.txt
+docs/

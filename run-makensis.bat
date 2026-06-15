@@ -1,2 +1,0 @@
-@echo off
-"C:\Users\user\AppData\Local\electron-builder\Cache\nsis\nsis-3.0.4.1\Bin\makensis.exe" -DPRODUCT_VERSION=0.4.1 -DPROJECT_DIR="C:\Users\user\Desktop\void notes" -DICON_PATH="C:\Users\user\Desktop\void notes\icon.ico" -DINSTALLER_OUT="C:\Users\user\Desktop\void notes\release\Void-Notes-Setup-0.4.1-Custom.exe" -DOUTPUT_DIR="C:\Users\user\Desktop\void notes\release" "C:\Users\user\Desktop\void notes\resources\installer\VoidNotesInstaller.nsi"

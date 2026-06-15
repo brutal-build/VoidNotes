@@ -66,7 +66,7 @@ export default function App() {
   const [showRightPanel, setShowRightPanel] = useState(true);
   const [activePanelTab, setActivePanelTab] = useState<"backlinks" | "tags" | "outline">("backlinks");
 
-  // Graph view placeholder
+  // Graph view
   const [showGraph, setShowGraph] = useState(false);
 
   // Global search

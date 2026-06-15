@@ -476,6 +476,12 @@ html, body, #root {
   transition: background 0.3s ease;
 }
 
+.main-content {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
 /* --- Top bar --- */
 .top-bar {
   display: flex;
