@@ -1,7 +1,7 @@
 {
   "name": "void-notes",
   "productName": "Void Notes",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "Second-brain notatnik Markdown oparty o Electron + React + CodeMirror 6",
   "main": "dist-electron/main.js",
   "author": "brutal-build",

@@ -4,12 +4,14 @@ import NoteEditor from "./NoteEditor";
 import NoteParser from "./NoteParser";
 import CommandPalette from "./CommandPalette";
 import VaultSetup from "./VaultSetup";
-import ModeSelection, { AppMode } from "./ModeSelection";
 import StatusBar from "./StatusBar";
 import TrafficLights from "./TrafficLights";
 import Settings, { ThemeName } from "./Settings";
 import Help from "./Help";
 import ResizablePanel from "./ResizablePanel";
+import LeftRibbon from "./LeftRibbon";
+import TabBar, { Tab } from "./TabBar";
+import RightPanel from "./RightPanel";
 import { parseFrontmatter, buildBacklinks, buildTagIndex } from "../plugins/frontmatter";
 
 const THEME_BG: Record<ThemeName, string> = {
@@ -21,7 +23,6 @@ const THEME_BG: Record<ThemeName, string> = {
 };
 
 export default function App() {
-  const [mode] = useState<AppMode>("minimalistic");
   const [vaultReady, setVaultReady] = useState(false);
   const [notes, setNotes] = useState<string[]>([]);
   const [activeNote, setActiveNote] = useState<string | null>(null);
@@ -52,6 +53,17 @@ export default function App() {
   });
   const allContents = useRef<Map<string, string>>(new Map());
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Tab system
+  const [openTabs, setOpenTabs] = useState<Tab[]>([]);
+  const [activeTabId, setActiveTabId] = useState<string | null>(null);
+
+  // Right panel
+  const [showRightPanel, setShowRightPanel] = useState(true);
+  const [activePanelTab, setActivePanelTab] = useState<"backlinks" | "tags" | "outline">("backlinks");
+
+  // Graph view placeholder
+  const [showGraph, setShowGraph] = useState(false);
 
   // --- Refs for stable closures ---
   const activeNoteRef = useRef(activeNote);
@@ -126,10 +138,18 @@ export default function App() {
 
   const openNote = useCallback(async (fileName: string) => {
     setActiveNote(fileName);
+    setActiveTabId(fileName);
     const content = await window.electronAPI.loadNote(fileName);
     setRawContent(content);
     setPreviewMode(false);
     setSaved(true);
+
+    // Add to tabs if not already open
+    setOpenTabs((prev) => {
+      if (prev.some((t) => t.id === fileName)) return prev;
+      const label = fileName.split("/").pop()?.replace(/\.md$/, "") || fileName;
+      return [...prev, { id: fileName, label, dirty: false }];
+    });
   }, []);
 
   const handleNewNote = useCallback(async () => {
@@ -139,6 +159,10 @@ export default function App() {
     await refreshBacklinks(files);
     await openNote(fileName);
   }, [refreshNotes, refreshBacklinks, openNote]);
+
+  const handleNewFolder = useCallback(async () => {
+    // Placeholder - will implement folder creation
+  }, []);
 
   const handleDailyNote = useCallback(async () => {
     const today = new Date();
@@ -164,9 +188,14 @@ export default function App() {
       setActiveNote(null);
       setRawContent("");
     }
+    // Remove from tabs
+    setOpenTabs((prev) => prev.filter((t) => t.id !== fileName));
+    if (activeTabId === fileName) {
+      setActiveTabId(null);
+    }
     const files = await refreshNotes();
     await refreshBacklinks(files);
-  }, [activeNote, refreshNotes, refreshBacklinks]);
+  }, [activeNote, activeTabId, refreshNotes, refreshBacklinks]);
 
   const handleRenameNote = useCallback((oldName: string) => {
     const baseName = oldName.split("/").pop()?.replace(/\.md$/, "") || oldName;
@@ -188,6 +217,14 @@ export default function App() {
   const handleContentChange = useCallback((value: string) => {
     setRawContent(value);
     setSaved(false);
+
+    // Mark tab as dirty
+    if (activeNote) {
+      setOpenTabs((prev) =>
+        prev.map((t) => (t.id === activeNote ? { ...t, dirty: true } : t))
+      );
+    }
+
     if (!activeNote) return;
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(async () => {
@@ -196,6 +233,11 @@ export default function App() {
       allContents.current.set(activeNote, value);
       setBacklinks(buildBacklinks(allContents.current));
       tagIndex.current = buildTagIndex(allContents.current);
+
+      // Mark tab as clean after save
+      setOpenTabs((prev) =>
+        prev.map((t) => (t.id === activeNote ? { ...t, dirty: false } : t))
+      );
     }, 500);
   }, [activeNote]);
 
@@ -210,6 +252,11 @@ export default function App() {
     allContents.current.set(activeNote, rawContent);
     setBacklinks(buildBacklinks(allContents.current));
     tagIndex.current = buildTagIndex(allContents.current);
+
+    // Mark tab as clean
+    setOpenTabs((prev) =>
+      prev.map((t) => (t.id === activeNote ? { ...t, dirty: false } : t))
+    );
   }, [activeNote, rawContent]);
 
   useEffect(() => { handleManualSaveRef.current = handleManualSave; }, [handleManualSave]);
@@ -283,7 +330,7 @@ export default function App() {
       refreshBacklinks(files);
       if (files.length > 0) openNote(files[0]);
     });
-  }, [vaultReady, mode]);
+  }, [vaultReady]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -303,17 +350,54 @@ export default function App() {
 
   const noteBacklinks = activeNote ? (backlinks.get(activeNote) || []) : [];
 
+  // Tab handlers
+  const handleTabSelect = useCallback((id: string) => {
+    openNote(id);
+  }, [openNote]);
+
+  const handleTabClose = useCallback((id: string) => {
+    setOpenTabs((prev) => prev.filter((t) => t.id !== id));
+    if (activeTabId === id) {
+      const remaining = openTabs.filter((t) => t.id !== id);
+      if (remaining.length > 0) {
+        openNote(remaining[remaining.length - 1].id);
+      } else {
+        setActiveNote(null);
+        setRawContent("");
+        setActiveTabId(null);
+      }
+    }
+  }, [activeTabId, openTabs, openNote]);
+
+  const handleTabReorder = useCallback((fromIndex: number, toIndex: number) => {
+    setOpenTabs((prev) => {
+      const next = [...prev];
+      const [moved] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, moved);
+      return next;
+    });
+  }, []);
+
   if (!vaultReady) {
     return <VaultSetup onVaultSelect={handleVaultSelect} />;
   }
 
   return (
     <div className="app">
-      {focusMode ? (
-        <button className="focus-restore-btn" onClick={() => setFocusMode(false)} title="Show sidebar (F9)">
-          &#9776;
-        </button>
-      ) : (
+      {!focusMode && (
+        <LeftRibbon
+          onNewNote={handleNewNote}
+          onNewFolder={handleNewFolder}
+          onOpenGraph={() => setShowGraph(!showGraph)}
+          onDailyNote={handleDailyNote}
+          onOpenTemplates={() => {}}
+          onOpenSettings={() => setShowSettings(true)}
+          onOpenSearch={() => setShowSearch(true)}
+          activePanel={showGraph ? "graph" : null}
+        />
+      )}
+
+      {!focusMode && (
         <ResizablePanel side="left" defaultWidth={240} minWidth={180} maxWidth={400} storageKey="void-sidebar-width">
           <Sidebar
             notes={filteredNotes}
@@ -336,7 +420,27 @@ export default function App() {
         </ResizablePanel>
       )}
 
+      {focusMode && (
+        <button className="focus-restore-btn" onClick={() => setFocusMode(false)} title="Show sidebar (F9)">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="3" y1="12" x2="21" y2="12"/>
+            <line x1="3" y1="6" x2="21" y2="6"/>
+            <line x1="3" y1="18" x2="21" y2="18"/>
+          </svg>
+        </button>
+      )}
+
       <div className="editor-area">
+        {!focusMode && openTabs.length > 0 && (
+          <TabBar
+            tabs={openTabs}
+            activeTab={activeTabId}
+            onSelect={handleTabSelect}
+            onClose={handleTabClose}
+            onReorder={handleTabReorder}
+          />
+        )}
+
         <div className="top-bar">
           <div className="top-bar-left">
             <div className="breadcrumb">
@@ -356,39 +460,60 @@ export default function App() {
             <button className={`btn-mode ${splitView ? "active" : ""}`} onClick={toggleSplitView} title="Split view (Ctrl+Shift+E)">
               Split
             </button>
+            <button
+              className={`btn-mode ${showRightPanel ? "active" : ""}`}
+              onClick={() => setShowRightPanel((v) => !v)}
+              title="Toggle right panel"
+            >
+              Panel
+            </button>
             <div className="top-bar-separator" />
             <TrafficLights />
           </div>
         </div>
 
-        <div className={`pane-container ${splitView ? "split-view" : ""}`} style={{ "--split-ratio": splitRatio } as React.CSSProperties}>
-          {splitView && activeNote ? (
-            <>
-              <div className="pane-editor pane-enter" style={{ flex: `0 0 ${splitRatio * 100}%` } as React.CSSProperties}>
-                <div className="editor-wrapper">
-                  <NoteEditor content={rawContent} onChange={handleContentChange} noteNames={notes} vimMode={vimMode} />
-                </div>
-              </div>
-              <div
-                className="split-divider"
-                onMouseDown={handleSplitMouseDown}
-                style={{ cursor: "col-resize" } as React.CSSProperties}
-              />
-              <NoteParser content={rawContent} noteNames={notes} className="pane-preview" style={{ flex: `0 0 ${(1 - splitRatio) * 100}%` } as React.CSSProperties} onWikiLinkClick={handleWikiLinkClick} />
-            </>
-          ) : (
-            <>
-              {!previewMode && activeNote && (
-                <div className="pane-editor pane-enter">
+        <div className="main-content">
+          <div className={`pane-container ${splitView ? "split-view" : ""}`} style={{ "--split-ratio": splitRatio } as React.CSSProperties}>
+            {splitView && activeNote ? (
+              <>
+                <div className="pane-editor pane-enter" style={{ flex: `0 0 ${splitRatio * 100}%` } as React.CSSProperties}>
                   <div className="editor-wrapper">
                     <NoteEditor content={rawContent} onChange={handleContentChange} noteNames={notes} vimMode={vimMode} />
                   </div>
                 </div>
-              )}
-              {previewMode && activeNote && (
-                <NoteParser content={rawContent} noteNames={notes} onWikiLinkClick={handleWikiLinkClick} />
-              )}
-            </>
+                <div
+                  className="split-divider"
+                  onMouseDown={handleSplitMouseDown}
+                  style={{ cursor: "col-resize" } as React.CSSProperties}
+                />
+                <NoteParser content={rawContent} noteNames={notes} className="pane-preview" style={{ flex: `0 0 ${(1 - splitRatio) * 100}%` } as React.CSSProperties} onWikiLinkClick={handleWikiLinkClick} />
+              </>
+            ) : (
+              <>
+                {!previewMode && activeNote && (
+                  <div className="pane-editor pane-enter">
+                    <div className="editor-wrapper">
+                      <NoteEditor content={rawContent} onChange={handleContentChange} noteNames={notes} vimMode={vimMode} />
+                    </div>
+                  </div>
+                )}
+                {previewMode && activeNote && (
+                  <NoteParser content={rawContent} noteNames={notes} onWikiLinkClick={handleWikiLinkClick} />
+                )}
+              </>
+            )}
+          </div>
+
+          {showRightPanel && activeNote && (
+            <RightPanel
+              activeNote={activeNote}
+              content={rawContent}
+              backlinks={noteBacklinks}
+              tags={sortedTags}
+              onNavigate={openNote}
+              activePanelTab={activePanelTab}
+              onPanelTabChange={setActivePanelTab}
+            />
           )}
         </div>
 
