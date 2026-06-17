@@ -1,0 +1,9 @@
+node_modules
+dist
+dist-electron
+release
+src
+electron
+public
+notes
+.git
