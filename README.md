@@ -90,5 +90,11 @@ MIT — free to use, modify, and distribute.
 ---
 
 <p align="center">
+  <a href="https://ko-fi.com/brutalbuild"><img src="https://img.shields.io/badge/Support%20me-Ko--fi-FF5E5B?logo=ko-fi&logoColor=white" alt="Ko-fi" /></a>
+</p>
+
+---
+
+<p align="center">
   <sub>Built by <a href="https://github.com/brutal-build">brutal-build</a></sub>
 </p>
