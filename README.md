@@ -90,6 +90,8 @@ npm run dist:win
 
 ---
 
+[![Ko-fi](https://img.shields.io/badge/Support%20me-Ko--fi-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/brutalbuild)
+
 ## License
 
 MIT — [brutal-build](https://github.com/brutal-build)
