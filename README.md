@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="logo.png" alt="Void Notes" width="180">
+  <img src="logo.png" alt="Void Notes" width="120">
 </p>
 
 # Void Notes Expanded
