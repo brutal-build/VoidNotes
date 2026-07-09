@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="logo.png" alt="Void Notes" width="120">
+</p>
+
 <h1 align="center">Void Notes</h1>
 
 > <p align="center">A brutalist, local-first Markdown knowledge management app. No cloud, no telemetry, no lock-in — your notes stay on your disk as plain <code>.md</code> files.</p>
