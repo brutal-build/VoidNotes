@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="logo.png" alt="Void Notes" width="180">
+</p>
+
 # Void Notes Expanded
 
 > An Obsidian-like Markdown knowledge management app.
