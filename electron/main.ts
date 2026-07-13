@@ -2,7 +2,8 @@ import { app } from "electron";
 import { createWindow } from "./window";
 import { initVault, registerIpcHandlers } from "./ipc-handlers";
 
-app.setAppUserModelId("com.pixelcodegh.VoidNotes");
+app.setAppUserModelId("VoidNotes");
+
 app.whenReady().then(() => {
   registerIpcHandlers();
   initVault();
