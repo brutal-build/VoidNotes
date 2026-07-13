@@ -1,4 +1,4 @@
-import { BrowserWindow, nativeImage, app } from "electron";
+import { BrowserWindow, app } from "electron";
 import * as path from "path";
 import * as fs from "fs";
 
@@ -10,9 +10,6 @@ export function getMainWindow(): BrowserWindow | null {
 }
 
 export function createWindow(): BrowserWindow {
-  const iconPath = path.resolve(app.getAppPath(), "icon.ico");
-  const appIcon = nativeImage.createFromPath(iconPath);
-
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -20,7 +17,6 @@ export function createWindow(): BrowserWindow {
     frame: false,
     titleBarStyle: "hidden",
     title: "Void Notes",
-    icon: appIcon,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -44,8 +40,6 @@ export function createWindow(): BrowserWindow {
     mainWindow = null;
     closeApproved = false;
   });
-
-  mainWindow.setIcon(appIcon);
 
   return mainWindow;
 }

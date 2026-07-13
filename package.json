@@ -44,7 +44,6 @@
           ]
         }
       ],
-      "icon": "icon",
       "requestedExecutionLevel": "asInvoker"
     },
     "nsis": {
