@@ -1,7 +1,6 @@
 import React from "react";
 import { APP_VERSION } from "../plugins/updater";
-
-export type ThemeName = "obsidian" | "light" | "dracula" | "nord" | "solarized";
+import type { ThemeName } from "../types";
 
 const THEMES: { name: ThemeName; label: string; colors: { bg: string; accent: string; text: string } }[] = [
   { name: "obsidian", label: "Obsidian", colors: { bg: "#1e1e1e", accent: "#8a70d6", text: "#e0e0e0" } },
@@ -9,6 +8,7 @@ const THEMES: { name: ThemeName; label: string; colors: { bg: string; accent: st
   { name: "dracula", label: "Dracula", colors: { bg: "#282a36", accent: "#bd93f9", text: "#f8f8f2" } },
   { name: "nord", label: "Nord", colors: { bg: "#2e3440", accent: "#88c0d0", text: "#eceff4" } },
   { name: "solarized", label: "Solarized", colors: { bg: "#002b36", accent: "#268bd2", text: "#93a1a1" } },
+  { name: "macos", label: "macOS", colors: { bg: "#1a1a1a", accent: "#007AFF", text: "#e0e0e0" } },
 ];
 
 const FONTS = [

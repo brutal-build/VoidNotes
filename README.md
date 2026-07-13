@@ -6,7 +6,7 @@
 
 > An Obsidian-like Markdown knowledge management app.
 
-Built with **Electron 35** + **React 19** + **CodeMirror 6** + **react-force-graph**. Local-first, no backend, no cloud — your notes stay on your disk as plain `.md` files.
+Built with **Electron 35** + **React 19** + **CodeMirror 6** + **d3-force**. Local-first, no backend, no cloud — your notes stay on your disk as plain `.md` files.
 
 ---
 
@@ -33,13 +33,14 @@ Get the latest installer from the **[Releases](https://github.com/brutal-build/V
 ### Expanded (Obsidian-like)
 - **Left Ribbon** — vertical icon bar (new note, new folder, search, daily note, graph, templates, bookmarks, settings)
 - **Tab System** — VS Code-style tabs with drag reorder and close buttons
-- **Graph View** — interactive force-directed graph of note connections (`react-force-graph`)
-- **Right Panel** — backlinks, tags, and outline/TOC tabs
+- **Graph View** — interactive force-directed graph of note connections (custom canvas engine with d3-force)
+- **Right Panel** — backlinks, tags, outline/TOC, and properties tabs
 - **Global Search** — `Ctrl+Shift+F` search across all notes with context
 - **Templates** — built-in templates (Daily Note, Meeting Notes, Project, Book Notes, Journal)
 - **Bookmarks** — star/bookmark notes via right-click context menu
 - **Command Palette** — `Ctrl+P` fuzzy search across all notes
 - **Focus Mode** — `F9` hides everything except the editor
+- **Canvas View** — infinite canvas for visual note-taking
 
 ---
 
@@ -90,7 +91,8 @@ npm run dist:win
 | react-markdown | Markdown rendering |
 | remark-gfm | GitHub Flavored Markdown |
 | gray-matter | YAML frontmatter |
-| react-force-graph | Graph visualization |
+| d3-force | Graph physics simulation |
+| Zustand | State management |
 
 ---
 

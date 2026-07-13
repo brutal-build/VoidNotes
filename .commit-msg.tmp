@@ -1,0 +1,38 @@
+v0.3.0: Expanded - macOS Glass Theme, Trash preview, dialogs, fixes
+
+New features:
+- macOS Glass Theme with backdrop-filter blur
+- Trash panel with note preview, styled restore/delete buttons
+- New note dialog (InputDialog) like new folder
+- Bookmark star icons in file tree
+- ConfirmDialog / InputDialog / Dialog system replacing native prompts
+- Missing wiki-note creation dialog
+- External file change watcher
+
+Bug fixes:
+- Autosave race condition (session coordinator)
+- Dirty-close dialog with Save/Discard/Cancel
+- Theme name mismatch in localStorage
+- Context menu z-index under editor (createPortal to body)
+- macOS preview pane missing glass effect
+- Dialog CSS missing (Delete Note, New Folder)
+- "Destination already exists" on new note (auto-increment)
+- Ctrl+E preview toggle not working in editor
+- Focus mode button overlapping window controls
+- Graph simulation leak on close
+- Trash restore/delete buttons unstyled
+
+UI/UX:
+- ARIA tree markup + keyboard navigation in sidebar
+- prefers-reduced-motion support
+- transition:all replaced with specific properties
+- Empty states for panels
+- Unified z-index/overlay rules
+- Bookmark cleanup on note delete
+
+Architecture:
+- VaultIndex for global search
+- Incremental backlinks via index
+- Code splitting with React.lazy
+- Session coordinator for tab isolation
+- trash:load IPC channel

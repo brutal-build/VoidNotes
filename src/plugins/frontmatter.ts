@@ -1,8 +1,9 @@
 import matter from "gray-matter";
+import { extractWikiLinks } from "../plugins/wiki-links-utils";
 
 export interface FrontmatterData {
   title?: string;
-  tags?: string[];
+  tags?: string[] | string;
   date?: string;
   [key: string]: unknown;
 }
@@ -10,6 +11,7 @@ export interface FrontmatterData {
 export interface ParsedNote {
   data: FrontmatterData;
   content: string;
+  error?: string;
 }
 
 export function parseFrontmatter(raw: string): ParsedNote {
@@ -19,26 +21,16 @@ export function parseFrontmatter(raw: string): ParsedNote {
       data: result.data as FrontmatterData,
       content: result.content,
     };
-  } catch {
-    return { data: {}, content: raw };
+  } catch (error) {
+    return { data: {}, content: raw, error: error instanceof Error ? error.message : "Invalid YAML frontmatter" };
   }
-}
-
-export function extractWikiLinks(content: string): string[] {
-  const regex = /\[\[([^\]]+)\]\]/g;
-  const links: string[] = [];
-  let match;
-  while ((match = regex.exec(content)) !== null) {
-    links.push(match[1]);
-  }
-  return links;
 }
 
 export function buildBacklinks(allNotes: Map<string, string>): Map<string, string[]> {
   const backlinks = new Map<string, string[]>();
 
   for (const [fileName, content] of allNotes) {
-    const links = extractWikiLinks(content);
+    const links = extractWikiLinks(content, false);
     for (const link of links) {
       const targetFile = link.endsWith(".md") ? link : `${link}.md`;
       if (!backlinks.has(targetFile)) {
@@ -66,7 +58,8 @@ export function buildTagIndex(allNotes: Map<string, string>): Map<string, string
 
   for (const [fileName, raw] of allNotes) {
     const { data, content } = parseFrontmatter(raw);
-    const frontTags = (data.tags || []).map((t: string) => t.toLowerCase());
+    const rawTags = Array.isArray(data.tags) ? data.tags : typeof data.tags === "string" ? data.tags.split(",") : [];
+    const frontTags = rawTags.map(String).map(tag => tag.trim().replace(/^#+/, "").toLowerCase()).filter(Boolean);
     const inlineTags = extractInlineTags(content);
     const allTags = [...new Set([...frontTags, ...inlineTags])];
 

@@ -19,3 +19,8 @@ setup.sh
 # Old files
 todo.txt
 docs/
+
+# Hermes / dev artifacts
+.hermes/
+.vercel/
+graphify-out/

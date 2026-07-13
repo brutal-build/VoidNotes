@@ -1,10 +1,5 @@
 import React, { useRef, useState, useCallback } from "react";
-
-export interface Tab {
-  id: string;
-  label: string;
-  dirty: boolean;
-}
+import type { Tab } from "../types";
 
 interface TabBarProps {
   tabs: Tab[];
@@ -44,12 +39,23 @@ export default function TabBar({ tabs, activeTab, onSelect, onClose, onReorder }
   }, []);
 
   return (
-    <div className="tab-bar">
+    <div className="tab-bar" role="tablist" aria-label="Open notes">
       {tabs.map((tab, index) => (
         <div
           key={tab.id}
           className={`tab ${tab.id === activeTab ? "active" : ""} ${dragIndex === index ? "dragging" : ""} ${dropIndex === index ? "drop-target" : ""}`}
           onClick={() => onSelect(tab.id)}
+          role="tab"
+          aria-selected={tab.id === activeTab}
+          aria-label={`${tab.label}${tab.dirty ? ", unsaved changes" : ""}`}
+          tabIndex={tab.id === activeTab ? 0 : -1}
+          onKeyDown={(e) => {
+            const delta = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+            if (delta) { e.preventDefault(); onSelect(tabs[(index + delta + tabs.length) % tabs.length].id); }
+            if (e.key === "Home") { e.preventDefault(); onSelect(tabs[0].id); }
+            if (e.key === "End") { e.preventDefault(); onSelect(tabs[tabs.length - 1].id); }
+            if (e.key === "Delete") { e.preventDefault(); onClose(tab.id); }
+          }}
           draggable
           onDragStart={(e) => handleDragStart(e, index)}
           onDragOver={(e) => handleDragOver(e, index)}
@@ -60,7 +66,7 @@ export default function TabBar({ tabs, activeTab, onSelect, onClose, onReorder }
             {tab.dirty && <span className="tab-dirty">&#8226;</span>}
             {tab.label}
           </span>
-          <button className="tab-close" onClick={(e) => { e.stopPropagation(); onClose(tab.id); }} title="Close tab">
+          <button className="tab-close" onClick={(e) => { e.stopPropagation(); onClose(tab.id); }} title="Close tab" aria-label={`Close ${tab.label}`} tabIndex={-1}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
             </svg>

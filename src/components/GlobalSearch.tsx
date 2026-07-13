@@ -1,8 +1,21 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { VaultIndex } from "../services/vault-index";
+
+export function buildSearchIndex(notes: string[], contents: Map<string, string>, modifiedAt = new Map<string, number>()): VaultIndex {
+  return new VaultIndex(notes.map((path) => ({ path, content: contents.get(path) ?? "", modifiedAt: modifiedAt.get(path) ?? 0 })));
+}
+
+export function getHighlightedParts(value: string, query: string): [string, string, string] {
+  const needle = query.trim();
+  const start = value.toLowerCase().indexOf(needle.toLowerCase());
+  if (start < 0 || !needle) return [value, "", ""];
+  return [value.slice(0, start), value.slice(start, start + needle.length), value.slice(start + needle.length)];
+}
 
 interface GlobalSearchProps {
   notes: string[];
   contents: Map<string, string>;
+  vaultIndex: VaultIndex;
   onSelect: (note: string) => void;
   onClose: () => void;
 }
@@ -31,15 +44,21 @@ function searchInContent(query: string, contents: Map<string, string>): SearchRe
   return results.slice(0, 100);
 }
 
-export default function GlobalSearch({ notes, contents, onSelect, onClose }: GlobalSearchProps) {
+export default function GlobalSearch({ notes, contents, vaultIndex, onSelect, onClose }: GlobalSearchProps) {
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const results = useMemo(() => {
     if (!query.trim()) return [];
-    return searchInContent(query, contents);
-  }, [query, contents]);
+    return vaultIndex.query(query, 100).map((entry) => {
+      const lines = entry.content.split("\n");
+      const lineIndex = lines.findIndex((line) => line.toLowerCase().includes(query.trim().toLowerCase()));
+      const text = lineIndex >= 0 ? lines[lineIndex] : entry.path;
+      const matchStart = text.toLowerCase().indexOf(query.trim().toLowerCase());
+      return { note: entry.path, line: Math.max(1, lineIndex + 1), text, matchStart: Math.max(0, matchStart), matchEnd: matchStart < 0 ? 0 : matchStart + query.trim().length };
+    });
+  }, [query, vaultIndex]);
 
   useEffect(() => { inputRef.current?.focus(); }, []);
   useEffect(() => { setSelected(0); }, [query]);

@@ -14,6 +14,7 @@ interface NoteEditorProps {
   vimMode?: boolean;
   readableLineLength?: boolean;
   editorFont?: string;
+  spellcheck?: boolean;
 }
 
 function wikiLinkCompletion(noteNames: string[]) {
@@ -95,7 +96,7 @@ const brutalTheme = EditorView.theme({
   },
 }, { dark: false });
 
-export default function NoteEditor({ content, onChange, noteNames, vimMode, readableLineLength, editorFont }: NoteEditorProps) {
+export default function NoteEditor({ content, onChange, noteNames, vimMode, readableLineLength, editorFont, spellcheck = true }: NoteEditorProps) {
   const wikiCompletion = useMemo(
     () => autocompletion({
       override: [wikiLinkCompletion(noteNames)],
@@ -122,7 +123,6 @@ export default function NoteEditor({ content, onChange, noteNames, vimMode, read
       styles[".cm-content"] = {
         ...styles[".cm-content"],
         maxWidth: "80ch",
-        margin: "0 auto",
       };
     }
 
@@ -161,6 +161,7 @@ export default function NoteEditor({ content, onChange, noteNames, vimMode, read
       theme="dark"
       height="100%"
       style={{ height: "100%" }}
+      spellCheck={spellcheck}
     />
   );
 }

@@ -1,7 +1,7 @@
 {
   "name": "void-notes",
   "productName": "Void Notes",
-  "version": "0.2.5",
+  "version": "0.3.0",
   "description": "Second-brain notatnik Markdown oparty o Electron + React + CodeMirror 6",
   "main": "dist-electron/main.js",
   "author": "brutal-build",
@@ -21,8 +21,8 @@
     "dist": "npm run build && npx electron-builder --win",
     "dist:win": "npm run build && npx electron-builder --win --publish never",
     "dist:publish": "npm run build && npx electron-builder --win --publish always",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "test": "npx -y node@22 node_modules/vitest/vitest.mjs run",
+    "test:watch": "npx -y node@22 node_modules/vitest/vitest.mjs"
   },
   "build": {
     "appId": "com.pixelcodegh.VoidNotes",

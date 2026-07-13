@@ -1,14 +1,19 @@
-import React from "react";
+import React, { useState } from "react";
 
 interface VaultSetupProps {
   onVaultSelect: (path: string) => void;
 }
 
 export default function VaultSetup({ onVaultSelect }: VaultSetupProps) {
+  const [error, setError] = useState<string | null>(null);
+
   const handleClick = async () => {
-    const vaultPath = await window.electronAPI.selectVault();
-    if (vaultPath) {
-      onVaultSelect(vaultPath);
+    setError(null);
+    const result = await window.electronAPI.selectVault();
+    if (result.ok) {
+      onVaultSelect(result.value);
+    } else if (result.error.code !== "CANCELLED") {
+      setError(result.error.message);
     }
   };
 
@@ -24,6 +29,7 @@ export default function VaultSetup({ onVaultSelect }: VaultSetupProps) {
         <button className="vault-setup-btn" onClick={handleClick}>
           Open Vault Folder
         </button>
+        {error && <p className="vault-setup-error" role="alert">{error}</p>}
         <p className="vault-setup-hint">
           All your notes will be stored locally in the selected folder.
         </p>

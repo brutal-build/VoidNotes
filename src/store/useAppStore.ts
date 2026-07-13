@@ -29,8 +29,9 @@ function loadBookmarks(): string[] {
 const initialTheme = (loadLocal("void-notes-theme", "obsidian") as ThemeName) || "obsidian";
 const initialVimMode = loadLocal("void-vim-mode", "false") === "true";
 const initialReadable = loadLocal("void-readable-line", "true") === "true";
-const initialEditorFont = loadLocal("void-editor-font", "Cascadia Code, Fira Code, JetBrains Mono, Consolas, monospace");
-const initialSpellcheck = loadLocal("void-spellcheck", "true") !== "false";
+const initialEditorFont = loadLocal("void-editor-font", "jetbrains-mono");
+const initialSpellcheck = loadLocal("void-spellcheck", "true") !== "false"; // default true
+const initialPreviewMode = loadLocal("void-preview-mode", "false") === "true";
 
 // ─── Store shape ─────────────────────────────────────────
 
@@ -133,12 +134,16 @@ export const useAppStore = create<AppState>((set, get) => ({
   notes: [],
   activeNote: null,
   rawContent: "",
-  previewMode: false,
+  previewMode: initialPreviewMode,
   saved: true,
   setNotes: (v) => set((s) => ({ notes: resolve(v, s.notes) })),
   setActiveNote: (v) => set((s) => ({ activeNote: resolve(v, s.activeNote) })),
   setRawContent: (v) => set((s) => ({ rawContent: resolve(v, s.rawContent) })),
-  setPreviewMode: (v) => set((s) => ({ previewMode: resolve(v, s.previewMode) })),
+  setPreviewMode: (v) => set((s) => {
+    const next = resolve(v, s.previewMode);
+    persist("void-preview-mode", String(next));
+    return { previewMode: next };
+  }),
   setSaved: (v) => set((s) => ({ saved: resolve(v, s.saved) })),
 
   // Backlinks & Tags
