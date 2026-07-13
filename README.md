@@ -7,6 +7,8 @@
 > <p align="center">A brutalist, local-first Markdown knowledge management app. No cloud, no telemetry, no lock-in — your notes stay on your disk as plain <code>.md</code> files.</p>
 
 <p align="center">Built with <strong>Electron 35</strong> + <strong>React 19</strong> + <strong>CodeMirror 6</strong> + <strong>react-force-graph</strong>. A privacy-focused second-brain notepad inspired by Obsidian.</p>
+<p align="center">
+<a href="https://www.producthunt.com/products/void-notes-minimalist-markdown-notepad?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-void-notes-minimalist-markdown-notepad" target="_blank" rel="noopener noreferrer"><img alt="Void Notes — Minimalist Markdown Notepad - A local-first Markdown second-brain  — free &amp; open-source | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1195560&amp;theme=dark&amp;t=1783978188675"></a></p>
 
 <p align="center">
   <a href="https://brutalportfolio-three.vercel.app/">Portfolio</a> ·
