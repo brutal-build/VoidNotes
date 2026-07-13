@@ -10,6 +10,9 @@
 </p>
 
 <p align="center">
+<a href="https://www.producthunt.com/products/void-notes-minimalist-markdown-notepad?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-void-notes-minimalist-markdown-notepad" target="_blank" rel="noopener noreferrer"><img alt="Void Notes — Minimalist Markdown Notepad - A local-first Markdown second-brain  — free &amp; open-source | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1195560&amp;theme=dark&amp;t=1783978188675"></a></p>
+
+<p align="center">
   <a href="https://github.com/brutal-build/VoidNotes/actions/workflows/release.yml"><img src="https://github.com/brutal-build/VoidNotes/actions/workflows/release.yml/badge.svg" alt="CI" /></a>
   <img src="https://img.shields.io/badge/tests-73%20passed-success?logo=vitest" alt="Tests" />
   <a href="https://github.com/brutal-build/VoidNotes/releases"><img src="https://img.shields.io/github/v/release/brutal-build/VoidNotes?label=latest" alt="Latest Release" /></a>
