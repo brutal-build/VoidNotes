@@ -25,20 +25,11 @@ dev artifacts
 .vercel/
 graphify-out/
 
-# Project docs & specs (local only)
-hermes.md
-agents.md
-spec.md
-obsidian-docs-structure.md
-DOCS/
-
-# Promo materials (local only)
-promo/
-
 # Dev tooling (local only)
 .agents/
 .cursor/
 .firecrawl/
-.github/
 .vscode/
-TODO/
+
+# Local project files (specs, docs, promo, TODO)
+.void-dev/
