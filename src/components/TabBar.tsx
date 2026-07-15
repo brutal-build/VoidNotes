@@ -1,4 +1,6 @@
 import React, { useRef, useState, useCallback } from "react";
+import { createPortal } from "react-dom";
+import ContextMenu, { ContextMenuItem } from "./ContextMenu";
 import type { Tab } from "../types";
 
 interface TabBarProps {
@@ -10,8 +12,24 @@ interface TabBarProps {
 }
 
 export default function TabBar({ tabs, activeTab, onSelect, onClose, onReorder }: TabBarProps) {
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; tabId: string } | null>(null);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
+
+  const handleContextMenu = useCallback((e: React.MouseEvent, tabId: string) => {
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY, tabId });
+  }, []);
+
+  const contextMenuItems: ContextMenuItem[] = contextMenu ? [
+    { label: "Close", icon: "close", action: () => onClose(contextMenu.tabId), shortcut: "Ctrl+W" },
+    { label: "Close Others", action: () => { for (const t of tabs) { if (t.id !== contextMenu.tabId) onClose(t.id); } } },
+    { label: "Close to Right", action: () => {
+      const idx = tabs.findIndex((t) => t.id === contextMenu.tabId);
+      for (let i = idx + 1; i < tabs.length; i++) onClose(tabs[i].id);
+    }},
+    { label: "Close All", action: () => { for (const t of tabs) onClose(t.id); } },
+  ] : [];
 
   const handleDragStart = useCallback((e: React.DragEvent, index: number) => {
     setDragIndex(index);
@@ -61,6 +79,7 @@ export default function TabBar({ tabs, activeTab, onSelect, onClose, onReorder }
           onDragOver={(e) => handleDragOver(e, index)}
           onDrop={(e) => handleDrop(e, index)}
           onDragEnd={handleDragEnd}
+          onContextMenu={(e) => handleContextMenu(e, tab.id)}
         >
           <span className="tab-label">
             {tab.dirty && <span className="tab-dirty">&#8226;</span>}
@@ -73,6 +92,15 @@ export default function TabBar({ tabs, activeTab, onSelect, onClose, onReorder }
           </button>
         </div>
       ))}
+      {contextMenu && createPortal(
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          items={contextMenuItems}
+          onClose={() => setContextMenu(null)}
+        />,
+        document.body
+      )}
     </div>
   );
 }

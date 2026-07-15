@@ -1,5 +1,5 @@
 import { SimulationNodeDatum } from "d3-force";
-import type { IpcResult, NoteStat, TrashEntry } from "./shared/ipc-contract";
+import type { IpcResult, NoteStat, TrashEntry, UpdateInfo, ExternalNoteChange, VaultStats } from "./shared/ipc-contract";
 
 declare global {
   interface Window {
@@ -34,12 +34,29 @@ export interface ElectronAPI {
   restoreTrash: (id: string) => Promise<IpcResult<string>>;
   deleteTrash: (id: string) => Promise<IpcResult<void>>;
   closeReady: () => Promise<IpcResult<void>>;
+  checkForUpdates: () => Promise<IpcResult<UpdateInfo | null>>;
+  downloadUpdate: () => Promise<IpcResult<void>>;
+  installUpdate: () => Promise<IpcResult<void>>;
+  onUpdateAvailable: (callback: (info: UpdateInfo) => void) => () => void;
+  onDownloadProgress: (callback: (percent: number) => void) => () => void;
+  onUpdateDownloaded: (callback: (info: UpdateInfo) => void) => () => void;
+  onUpdateError: (callback: (message: string) => void) => () => void;
+  onUpdateNotAvailable: (callback: () => void) => () => void;
   onCloseRequested: (callback: () => void) => () => void;
+  onExternalChange?: (callback: (change: ExternalNoteChange) => void) => () => void;
+  writeFile: (relativePath: string, data: number[]) => Promise<IpcResult<string>>;
+  readFile: (relativePath: string) => Promise<IpcResult<number[]>>;
+  logError?: (payload: { message: string; stack?: string; timestamp: string }) => Promise<IpcResult<void>>;
+  dailyNotePath: () => Promise<IpcResult<string>>;
+  exportNote: (notePath: string) => Promise<IpcResult<string>>;
+  exportVaultZip: () => Promise<IpcResult<string>>;
+  exportNoteHtml: (notePath: string) => Promise<IpcResult<string>>;
+  getVaultStats: () => Promise<IpcResult<VaultStats>>;
 }
 
 // ─── Theme ───────────────────────────────────────────────
 
-export type ThemeName = "obsidian" | "light" | "dracula" | "nord" | "solarized" | "macos";
+export type ThemeName = "obsidian" | "light" | "macos" | "system";
 
 // ─── Note ────────────────────────────────────────────────
 
@@ -104,6 +121,9 @@ export interface GraphFilter {
   showTags: string[];
   colorMode: ColorMode;
   sizeMode: SizeMode;
+  nodeScale: number;
+  linkThickness: number;
+  showArrows: boolean;
 }
 
 export interface GraphLayoutOptions {
@@ -111,6 +131,8 @@ export interface GraphLayoutOptions {
   height: number;
   chargeStrength?: number;
   linkDistance?: number;
+  linkStrength?: number;
+  centerStrength?: number;
   collideRadius?: number;
 }
 

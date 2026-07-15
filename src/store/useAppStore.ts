@@ -24,6 +24,13 @@ function loadBookmarks(): string[] {
   } catch { return []; }
 }
 
+function loadPinned(): string[] {
+  try {
+    const stored = localStorage.getItem("void-pinned");
+    return stored ? JSON.parse(stored) : [];
+  } catch { return []; }
+}
+
 // ─── Initial values ──────────────────────────────────────
 
 const initialTheme = (loadLocal("void-notes-theme", "obsidian") as ThemeName) || "obsidian";
@@ -32,6 +39,9 @@ const initialReadable = loadLocal("void-readable-line", "true") === "true";
 const initialEditorFont = loadLocal("void-editor-font", "jetbrains-mono");
 const initialSpellcheck = loadLocal("void-spellcheck", "true") !== "false"; // default true
 const initialPreviewMode = loadLocal("void-preview-mode", "false") === "true";
+const initialShowRightPanel = loadLocal("void-right-panel", "false") !== "false"; // default true
+const initialAutoUpdate = loadLocal("void-auto-update", "false") === "true";
+const initialDailyNoteTemplate = loadLocal("void-daily-note-template", "# {{date}}\n\n");
 
 // ─── Store shape ─────────────────────────────────────────
 
@@ -119,6 +129,29 @@ interface AppState {
   renameValue: string;
   setRenamingFile: (v: Updater<string | null>) => void;
   setRenameValue: (v: Updater<string>) => void;
+
+  // Update
+  autoUpdate: boolean;
+  updateInfo: { version: string; releaseDate: string; releaseNotes: string } | null;
+  downloadProgress: number;
+  updateDownloaded: boolean;
+  updateError: string | null;
+  setAutoUpdate: (v: Updater<boolean>) => void;
+  setUpdateInfo: (v: Updater<{ version: string; releaseDate: string; releaseNotes: string } | null>) => void;
+  setDownloadProgress: (v: Updater<number>) => void;
+  setUpdateDownloaded: (v: Updater<boolean>) => void;
+  setUpdateError: (v: Updater<string | null>) => void;
+
+  // Daily Notes
+  dailyNoteTemplate: string;
+  setDailyNoteTemplate: (v: Updater<string>) => void;
+
+  // Pinned Notes
+  pinnedNotes: string[];
+  setPinnedNotes: (v: Updater<string[]>) => void;
+  togglePin: (note: string) => void;
+  isPinned: (note: string) => boolean;
+
 }
 
 // ─── Store ───────────────────────────────────────────────
@@ -175,7 +208,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   showTemplates: false,
   showBookmarks: false,
   showCanvas: false,
-  showRightPanel: true,
+  showRightPanel: initialShowRightPanel,
   focusMode: false,
   activePanelTab: "backlinks",
   setShowSearch: (v) => set((s) => ({ showSearch: resolve(v, s.showSearch) })),
@@ -186,7 +219,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   setShowTemplates: (v) => set((s) => ({ showTemplates: resolve(v, s.showTemplates) })),
   setShowBookmarks: (v) => set((s) => ({ showBookmarks: resolve(v, s.showBookmarks) })),
   setShowCanvas: (v) => set((s) => ({ showCanvas: resolve(v, s.showCanvas) })),
-  setShowRightPanel: (v) => set((s) => ({ showRightPanel: resolve(v, s.showRightPanel) })),
+  setShowRightPanel: (v) => set((s) => {
+    const next = resolve(v, s.showRightPanel);
+    persist("void-right-panel", String(next));
+    return { showRightPanel: next };
+  }),
   setFocusMode: (v) => set((s) => ({ focusMode: resolve(v, s.focusMode) })),
   setActivePanelTab: (v) => set((s) => ({ activePanelTab: resolve(v, s.activePanelTab) })),
 
@@ -243,6 +280,46 @@ export const useAppStore = create<AppState>((set, get) => ({
   renameValue: "",
   setRenamingFile: (v) => set((s) => ({ renamingFile: resolve(v, s.renamingFile) })),
   setRenameValue: (v) => set((s) => ({ renameValue: resolve(v, s.renameValue) })),
+
+  // Update
+  autoUpdate: initialAutoUpdate,
+  updateInfo: null,
+  downloadProgress: 0,
+  updateDownloaded: false,
+  updateError: null,
+  setAutoUpdate: (v) => set((s) => {
+    const next = resolve(v, s.autoUpdate);
+    persist("void-auto-update", String(next));
+    return { autoUpdate: next };
+  }),
+  setUpdateInfo: (v) => set((s) => ({ updateInfo: resolve(v, s.updateInfo) })),
+  setDownloadProgress: (v) => set((s) => ({ downloadProgress: resolve(v, s.downloadProgress) })),
+  setUpdateDownloaded: (v) => set((s) => ({ updateDownloaded: resolve(v, s.updateDownloaded) })),
+  setUpdateError: (v) => set((s) => ({ updateError: resolve(v, s.updateError) })),
+
+  // Daily Notes
+  dailyNoteTemplate: initialDailyNoteTemplate,
+  setDailyNoteTemplate: (v) => set((s) => {
+    const next = resolve(v, s.dailyNoteTemplate);
+    persist("void-daily-note-template", next);
+    return { dailyNoteTemplate: next };
+  }),
+
+  // Pinned Notes
+  pinnedNotes: loadPinned(),
+  setPinnedNotes: (v) => set((s) => {
+    const next = resolve(v, s.pinnedNotes);
+    persist("void-pinned", JSON.stringify(next));
+    return { pinnedNotes: next };
+  }),
+  togglePin: (note) => {
+    const prev = get().pinnedNotes;
+    const next = prev.includes(note) ? prev.filter((n) => n !== note) : [...prev, note];
+    persist("void-pinned", JSON.stringify(next));
+    set({ pinnedNotes: next });
+  },
+  isPinned: (note) => get().pinnedNotes.includes(note),
+
 }));
 
 // ─── Selectors ───────────────────────────────────────────
@@ -251,13 +328,26 @@ export const useFilteredNotes = () => {
   const notes = useAppStore((s) => s.notes);
   const selectedTags = useAppStore((s) => s.selectedTags);
   const tagIndex = useAppStore((s) => s.tagIndex);
-  if (selectedTags.length === 0) return notes;
-  return notes.filter((file) =>
-    selectedTags.every((tag) => {
-      const files = tagIndex.get(tag);
-      return files && files.includes(file);
-    })
-  );
+  const pinnedNotes = useAppStore((s) => s.pinnedNotes);
+
+  const filtered =
+    selectedTags.length === 0
+      ? notes
+      : notes.filter((file) =>
+          selectedTags.every((tag) => {
+            const files = tagIndex.get(tag);
+            return files && files.includes(file);
+          }),
+        );
+
+  // Sort: pinned notes first, then alphabetical within each group
+  return [...filtered].sort((a, b) => {
+    const aPinned = pinnedNotes.includes(a);
+    const bPinned = pinnedNotes.includes(b);
+    if (aPinned && !bPinned) return -1;
+    if (!aPinned && bPinned) return 1;
+    return a.localeCompare(b);
+  });
 };
 
 export const useSortedTags = () => {

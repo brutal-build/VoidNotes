@@ -1,13 +1,20 @@
 import { app } from "electron";
-import { createWindow } from "./window";
+import log from "electron-log";
+import { createWindow, getMainWindow } from "./window";
 import { initVault, registerIpcHandlers } from "./ipc-handlers";
+import { initUpdater } from "./updater";
 
-app.setAppUserModelId("VoidNotes");
+app.setAppUserModelId("com.pixelcodegh.VoidNotes");
+
+log.catchErrors();
 
 app.whenReady().then(() => {
+  log.info("[app] Void Notes starting");
   registerIpcHandlers();
+  const win = createWindow();
+  log.info("[app] Window created");
   initVault();
-  createWindow();
+  initUpdater(win);
 });
 
 app.on("window-all-closed", () => {
@@ -19,6 +26,6 @@ app.on("activate", () => {
     const { getMainWindow } = require("./window");
     if (!getMainWindow()) createWindow();
   } catch (error) {
-    console.error("Failed to activate window:", error);
+    log.error("[app] Failed to activate window:", error);
   }
 });

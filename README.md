@@ -10,8 +10,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/brutal-build/VoidNotes/actions/workflows/release.yml"><img src="https://github.com/brutal-build/VoidNotes/actions/workflows/release.yml/badge.svg" alt="CI" /></a>
-  <img src="https://img.shields.io/badge/tests-73%20passed-success?logo=vitest" alt="Tests" />
+  <a href="https://github.com/brutal-build/VoidNotes/actions/workflows/ci.yml"><img src="https://github.com/brutal-build/VoidNotes/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <img src="https://img.shields.io/badge/tests-103%20passed-success?logo=vitest" alt="Tests" />
   <a href="https://github.com/brutal-build/VoidNotes/releases"><img src="https://img.shields.io/github/v/release/brutal-build/VoidNotes?label=latest" alt="Latest Release" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License" /></a>
 </p>

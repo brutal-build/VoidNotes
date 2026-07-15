@@ -1,49 +1,42 @@
-import React, { Suspense, useState, useEffect, useCallback, useRef, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import Sidebar from "./Sidebar";
-import NoteParser from "./NoteParser";
 import CommandPalette from "./CommandPalette";
 import VaultSetup from "./VaultSetup";
-import StatusBar from "./StatusBar";
-import TrafficLights from "./TrafficLights";
 import ResizablePanel from "./ResizablePanel";
 import LeftRibbon from "./LeftRibbon";
-import TabBar from "./TabBar";
-import RightPanel from "./RightPanel";
-import ErrorBoundary from "./ErrorBoundary";
-import { InputDialog } from "./ui/InputDialog";
-import { ConfirmDialog } from "./ui/ConfirmDialog";
-import { parseFrontmatter, buildBacklinks, buildTagIndex } from "../plugins/frontmatter";
+import UpdateDialog from "./UpdateDialog";
+import RenameModal from "./RenameModal";
+import SettingsWrapper from "./SettingsWrapper";
+import AppOverlays from "./AppOverlays";
+import EditorArea from "./EditorArea";
+import LazyPanel from "./LazyPanel";
 import { useAppStore, useFilteredNotes, useSortedTags, useNoteBacklinks } from "../store/useAppStore";
 import { createNoteSessionCoordinator, nearestNeighborAfterClose } from "../services/note-session";
-import { VaultIndex } from "../services/vault-index";
-import type { ThemeName, Tab, ActivePanel } from "../types";
+import { createVaultIndex, updateVaultIndex, removeFromVaultIndex } from "../services/vault-index";
+import { buildBacklinks } from "../plugins/frontmatter";
+import { useModalState } from "../hooks/useModalState";
+import { useTheme } from "../hooks/useTheme";
+import { useVaultSync } from "../hooks/useVaultSync";
+import { useNoteOperations } from "../hooks/useNoteOperations";
+import { useAutosave } from "../hooks/useAutosave";
+import { useKeyboardShortcuts } from "../hooks/useKeyboardShortcuts";
+import { useSplitView } from "../hooks/useSplitView";
+import { useUpdateFlow } from "../hooks/useUpdateFlow";
+import { useToast } from "../hooks/useToast";
+import type { Tab, ActivePanel } from "../types";
 
-// Lazy-loaded — these are opened modally and don't need to load upfront
-const Settings = React.lazy(() => import("./Settings"));
+// Lazy-loaded
 const Help = React.lazy(() => import("./Help"));
 const GraphView = React.lazy(() => import("./GraphView"));
 const GlobalSearch = React.lazy(() => import("./GlobalSearch"));
 const TemplatesPanel = React.lazy(() => import("./TemplatesPanel"));
 const BookmarksPanel = React.lazy(() => import("./BookmarksPanel"));
-const NoteEditor = React.lazy(() => import("./NoteEditor"));
 const CanvasView = React.lazy(() => import("./CanvasView"));
 const TrashPanel = React.lazy(() => import("./TrashPanel"));
-
-function LazyFallback() {
-  return <div className="lazy-loading">Loading...</div>;
-}
-
-const THEME_BG: Record<ThemeName, string> = {
-  obsidian: "#1e1e1e",
-  light: "#ffffff",
-  dracula: "#282a36",
-  nord: "#2e3440",
-  solarized: "#002b36",
-  macos: "#1a1a1a",
-};
+const VaultStats = React.lazy(() => import("./VaultStats"));
 
 export default function App() {
-  // ─── Store ──────────────────────────────────────────────
+  // ─── Store selectors ────────────────────────────────────
   const vaultReady = useAppStore((s) => s.vaultReady);
   const notes = useAppStore((s) => s.notes);
   const activeNote = useAppStore((s) => s.activeNote);
@@ -64,7 +57,6 @@ export default function App() {
   const focusMode = useAppStore((s) => s.focusMode);
   const saved = useAppStore((s) => s.saved);
   const vaultPath = useAppStore((s) => s.vaultPath);
-  const theme = useAppStore((s) => s.theme);
   const vimMode = useAppStore((s) => s.vimMode);
   const readableLineLength = useAppStore((s) => s.readableLineLength);
   const editorFont = useAppStore((s) => s.editorFont);
@@ -75,34 +67,71 @@ export default function App() {
   const spellcheckStore = useAppStore((s) => s.spellcheck);
   const renamingFile = useAppStore((s) => s.renamingFile);
   const renameValue = useAppStore((s) => s.renameValue);
+  const autoUpdate = useAppStore((s) => s.autoUpdate);
+  const dailyNoteTemplate = useAppStore((s) => s.dailyNoteTemplate);
+  const pinnedNotes = useAppStore((s) => s.pinnedNotes);
 
   // Derived
   const filteredNotes = useFilteredNotes();
   const sortedTags = useSortedTags();
   const noteBacklinks = useNoteBacklinks();
 
-  // Shared VaultIndex - built once from allContents, passed to GlobalSearch
-  const vaultIndex = useMemo(() => {
-    const entries = notes.map((path) => ({
+  // Incremental vault index (ref + version counter for re-renders)
+  const vaultIndexRef = useRef(createVaultIndex());
+  const [vaultIndexVersion, setVaultIndexVersion] = useState(0);
+
+  // Incremental index update callback
+  const handleNoteSaved = useCallback((path: string, content: string) => {
+    updateVaultIndex(vaultIndexRef.current, path, content);
+    setVaultIndexVersion((v) => v + 1);
+  }, []);
+
+  const rebuildFullIndex = useCallback(() => {
+    const state = useAppStore.getState();
+    const entries = state.notes.map((path) => ({
       path,
-      content: allContents.get(path) ?? "",
+      content: state.allContents.get(path) ?? "",
     }));
-    return new VaultIndex(entries);
-  }, [notes, allContents]);
+    vaultIndexRef.current = createVaultIndex(entries);
+    setVaultIndexVersion((v) => v + 1);
+  }, []);
 
-  // ─── Local UI state ────────────────────────────────────
-  const [showNewNoteDialog, setShowNewNoteDialog] = useState(false);
-  const [showNewFolderDialog, setShowNewFolderDialog] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [showCloseConfirmDialog, setShowCloseConfirmDialog] = useState(false);
-  const [closingTabId, setClosingTabId] = useState<string | null>(null);
-  const [showDeleteConfirmDialog, setShowDeleteConfirmDialog] = useState(false);
-  const [deletingFile, setDeletingFile] = useState<string | null>(null);
-  const [showWikiCreateDialog, setShowWikiCreateDialog] = useState(false);
-  const [wikiTarget, setWikiTarget] = useState<string | null>(null);
-  const [showTrash, setShowTrash] = useState(false);
+  // ─── Store setters ─────────────────────────────────────
+  const setPreviewMode = useAppStore((s) => s.setPreviewMode);
+  const setShowSearch = useAppStore((s) => s.setShowSearch);
+  const setShowSettings = useAppStore((s) => s.setShowSettings);
+  const setShowHelp = useAppStore((s) => s.setShowHelp);
+  const setShowGraph = useAppStore((s) => s.setShowGraph);
+  const setShowGlobalSearch = useAppStore((s) => s.setShowGlobalSearch);
+  const setShowTemplates = useAppStore((s) => s.setShowTemplates);
+  const setShowBookmarks = useAppStore((s) => s.setShowBookmarks);
+  const setShowCanvas = useAppStore((s) => s.setShowCanvas);
+  const setShowRightPanel = useAppStore((s) => s.setShowRightPanel);
+  const setFocusMode = useAppStore((s) => s.setFocusMode);
+  const setActivePanelTab = useAppStore((s) => s.setActivePanelTab);
+  const setVimMode = useAppStore((s) => s.setVimMode);
+  const setReadableLineLength = useAppStore((s) => s.setReadableLineLength);
+  const setEditorFont = useAppStore((s) => s.setEditorFont);
+  const setSpellcheck = useAppStore((s) => s.setSpellcheck);
+  const toggleBookmark = useAppStore((s) => s.toggleBookmark);
+  const toggleTag = useAppStore((s) => s.toggleTag);
+  const setRenamingFile = useAppStore((s) => s.setRenamingFile);
+  const setRenameValue = useAppStore((s) => s.setRenameValue);
+  const setAutoUpdate = useAppStore((s) => s.setAutoUpdate);
+  const setRawContent = useAppStore((s) => s.setRawContent);
+  const setDailyNoteTemplate = useAppStore((s) => s.setDailyNoteTemplate);
+  const togglePin = useAppStore((s) => s.togglePin);
+  const [showVaultStats, setShowVaultStats] = useState(false);
 
-  // ─── Note session coordinator ───────────────────────────
+  // ═══ Hooks ═══════════════════════════════════════════════
+
+  const modal = useModalState();
+
+  const { theme, setTheme } = useTheme();
+
+  const { refreshNotes, refreshBacklinks, handleVaultSelect, handleSwitchVault } =
+    useVaultSync(modal.setErrorMessage);
+
   const sessionCoordinator = useMemo(() => createNoteSessionCoordinator({
     load: async (id: string) => {
       const result = await window.electronAPI.loadNote(id);
@@ -115,735 +144,450 @@ export default function App() {
     },
   }), []);
 
-  // ─── Refy (for callbacks that can't use stale closures) ──
-  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // ─── Split state (local - no store re-render during drag) ──
-  const [splitView, setSplitView] = useState(() => {
-    try { return localStorage.getItem("void-split-view") === "true"; } catch { return false; }
+  const noteOps = useNoteOperations({
+    sessionCoordinator,
+    refreshNotes,
+    refreshBacklinks,
+    setErrorMessage: modal.setErrorMessage,
+    setShowNewNoteDialog: modal.setShowNewNoteDialog,
+    setShowWikiCreateDialog: modal.setShowWikiCreateDialog,
+    setWikiTarget: modal.setWikiTarget,
   });
-  const [splitRatio, setSplitRatio] = useState(() => {
-    try { return parseFloat(localStorage.getItem("void-split-ratio") || "0.5") || 0.5; } catch { return 0.5; }
+
+  const { handleContentChange, handleManualSave } = useAutosave(
+    sessionCoordinator,
+    modal.setErrorMessage,
+    handleNoteSaved,
+  );
+
+  const splitView = useSplitView();
+
+  const togglePreview = useCallback(
+    () => setPreviewMode(!useAppStore.getState().previewMode),
+    [setPreviewMode],
+  );
+
+  useKeyboardShortcuts({
+    togglePreview,
+    toggleSplitView: splitView.toggleSplitView,
+    handleManualSave,
+    handleNewNote: noteOps.handleNewNote,
+    handleDailyNote: noteOps.createDailyNote,
   });
-  const splitRatioRef = useRef(splitRatio);
-  const [splitDown, setSplitDown] = useState(false);
 
-  // ─── Actions ────────────────────────────────────────────
-  const setVaultPath = useAppStore((s) => s.setVaultPath);
-  const setVaultReady = useAppStore((s) => s.setVaultReady);
-  const setNotes = useAppStore((s) => s.setNotes);
-  const setActiveNote = useAppStore((s) => s.setActiveNote);
-  const setRawContent = useAppStore((s) => s.setRawContent);
-  const setPreviewMode = useAppStore((s) => s.setPreviewMode);
-  const setSaved = useAppStore((s) => s.setSaved);
-  const setAllContents = useAppStore((s) => s.setAllContents);
-  const setBacklinks = useAppStore((s) => s.setBacklinks);
-  const setTagIndex = useAppStore((s) => s.setTagIndex);
-  const setOpenTabs = useAppStore((s) => s.setOpenTabs);
-  const setActiveTabId = useAppStore((s) => s.setActiveTabId);
-  const setShowSearch = useAppStore((s) => s.setShowSearch);
-  const setShowSettings = useAppStore((s) => s.setShowSettings);
-  const setShowHelp = useAppStore((s) => s.setShowHelp);
-  const setShowGraph = useAppStore((s) => s.setShowGraph);
-  const setShowGlobalSearch = useAppStore((s) => s.setShowGlobalSearch);
-  const setShowTemplates = useAppStore((s) => s.setShowTemplates);
-  const setShowBookmarks = useAppStore((s) => s.setShowBookmarks);
-  const setShowCanvas = useAppStore((s) => s.setShowCanvas);
-  const setShowRightPanel = useAppStore((s) => s.setShowRightPanel);
-  const setFocusMode = useAppStore((s) => s.setFocusMode);
-  const setActivePanelTab = useAppStore((s) => s.setActivePanelTab);
-  const setTheme = useAppStore((s) => s.setTheme);
-  const setVimMode = useAppStore((s) => s.setVimMode);
-  const setReadableLineLength = useAppStore((s) => s.setReadableLineLength);
-  const setEditorFont = useAppStore((s) => s.setEditorFont);
-  const setSpellcheck = useAppStore((s) => s.setSpellcheck);
-  const setBookmarks = useAppStore((s) => s.setBookmarks);
-  const toggleBookmark = useAppStore((s) => s.toggleBookmark);
-  const toggleTag = useAppStore((s) => s.toggleTag);
-  const setRenamingFile = useAppStore((s) => s.setRenamingFile);
-  const setRenameValue = useAppStore((s) => s.setRenameValue);
+  const updateFlow = useUpdateFlow();
+  const { toasts, showToast, dismissToast } = useToast();
 
-  const handleVaultSelect = useCallback(async (p: string) => {
-    const result = await window.electronAPI.setVault(p);
-    if (!result.ok) {
-      setErrorMessage(`Failed to set vault: ${result.error.message}`);
-      return;
+  // Show error toasts when errorMessage is set
+  useEffect(() => {
+    if (modal.errorMessage) {
+      showToast("error", modal.errorMessage);
     }
-    setVaultPath(p);
-    setVaultReady(true);
-  }, [setVaultPath, setVaultReady]);
+  }, [modal.errorMessage]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ─── Initial vault load ──────────────────────────────────
   useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
-    window.electronAPI.setBackground(THEME_BG[theme]);
-  }, [theme]);
+    if (!vaultReady) return;
+    refreshNotes().then((files) => {
+      refreshBacklinks(files);
+      if (files.length > 0) noteOps.openNote(files[0]);
+    });
+  }, [vaultReady]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Build the full vault index on initial load
   useEffect(() => {
-    window.electronAPI.getVault().then((result) => {
-      if (result.ok && result.value) {
-        setVaultPath(result.value);
-        setVaultReady(true);
+    if (!vaultReady) return;
+    rebuildFullIndex();
+  }, [vaultReady]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Rebuild index when notes count changes (structural changes: add/remove)
+  useEffect(() => {
+    if (!vaultReady) return;
+    if (vaultIndexRef.current.size !== notes.length) {
+      rebuildFullIndex();
+    }
+  }, [notes.length, vaultReady, rebuildFullIndex]);
+
+  // ─── Tab management ─────────────────────────────────────
+  const handleTabSelect = useCallback(
+    (id: string) => { noteOps.openNote(id); },
+    [noteOps.openNote],
+  );
+
+  const closeTab = useCallback((id: string) => {
+    const currentTabs = useAppStore.getState().openTabs;
+    const remaining = currentTabs.filter((t) => t.id !== id);
+    const setOpenTabs = useAppStore.getState().setOpenTabs;
+    setOpenTabs(remaining);
+    const currentActiveTabId = useAppStore.getState().activeTabId;
+    if (currentActiveTabId === id) {
+      const nextTab = nearestNeighborAfterClose(currentTabs.map((t) => t.id), id);
+      if (nextTab) noteOps.openNote(nextTab);
+      else {
+        useAppStore.getState().setActiveNote(null);
+        useAppStore.getState().setRawContent("");
+        useAppStore.getState().setActiveTabId(null);
       }
-    });
-  }, [setVaultPath, setVaultReady]);
-
-  const refreshNotes = useCallback(async () => {
-    const result = await window.electronAPI.listNotes();
-    if (!result.ok) {
-      setErrorMessage(`Failed to list notes: ${result.error.message}`);
-      return [];
     }
-    setNotes(result.value.notes);
-    return result.value.notes;
-  }, [setNotes]);
+  }, [noteOps.openNote]);
 
-  const refreshBacklinks = useCallback(async (files: string[]) => {
-    const entries = await Promise.all(files.map(async (file) => {
-      const result = await window.electronAPI.loadNote(file);
-      return [file, result.ok ? result.value : ""] as const;
-    }));
-    const contents = new Map<string, string>(entries);
-    setAllContents(contents);
-    setBacklinks(buildBacklinks(contents));
-    setTagIndex(buildTagIndex(contents));
-  }, [setAllContents, setBacklinks, setTagIndex]);
-
-  const openNote = useCallback(async (fileName: string) => {
-    setActiveNote(fileName);
-    setActiveTabId(fileName);
-    const result = await window.electronAPI.loadNote(fileName);
-    if (!result.ok) {
-      setErrorMessage(`Failed to load note: ${result.error.message}`);
+  const handleTabClose = useCallback((id: string) => {
+    const session = sessionCoordinator.get(id);
+    if (session?.dirty) {
+      modal.setClosingTabId(id);
+      modal.setShowCloseConfirmDialog(true);
       return;
     }
-    setRawContent(result.value);
-    // Don't reset previewMode - let it persist across notes
-    setSaved(true);
+    closeTab(id);
+  }, [sessionCoordinator, closeTab, modal]);
+
+  const handleSaveAndClose = useCallback(async () => {
+    if (!modal.closingTabId) return;
+    try {
+      await sessionCoordinator.save(modal.closingTabId);
+      closeTab(modal.closingTabId);
+    } catch (err) {
+      modal.setErrorMessage(`Failed to save note: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    modal.setShowCloseConfirmDialog(false);
+    modal.setClosingTabId(null);
+  }, [modal.closingTabId, sessionCoordinator, closeTab, modal]);
+
+  const handleDiscardAndClose = useCallback(() => {
+    if (!modal.closingTabId) return;
+    sessionCoordinator.delete(modal.closingTabId);
+    closeTab(modal.closingTabId);
+    modal.setShowCloseConfirmDialog(false);
+    modal.setClosingTabId(null);
+  }, [modal.closingTabId, sessionCoordinator, closeTab, modal]);
+
+  const handleCancelClose = useCallback(() => {
+    modal.setShowCloseConfirmDialog(false);
+    modal.setClosingTabId(null);
+  }, [modal]);
+
+  const handleTabReorder = useCallback((fromIndex: number, toIndex: number) => {
+    const setOpenTabs = useAppStore.getState().setOpenTabs;
     setOpenTabs((prev: Tab[]) => {
-      if (prev.some((t) => t.id === fileName)) return prev;
-      const label = fileName.split("/").pop()?.replace(/\.md$/, "") || fileName;
-      return [...prev, { id: fileName, label, dirty: false }];
+      const next = [...prev];
+      const [moved] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, moved);
+      return next;
     });
-  }, [setActiveNote, setActiveTabId, setRawContent, setSaved, setOpenTabs]);
-
-  const handleNewNote = useCallback(() => {
-    setShowNewNoteDialog(true);
   }, []);
 
-  const confirmNewNote = useCallback(async (name: string) => {
-    setShowNewNoteDialog(false);
-    const raw = name.trim();
-    const fileName = raw.endsWith(".md") ? raw : `${raw}.md`;
-    const result = await window.electronAPI.createNote(fileName);
-    if (!result.ok) {
-      setErrorMessage(`Failed to create note: ${result.error.message}`);
-      return;
-    }
-    const actualName = result.value;
-    const files = await refreshNotes();
-    await refreshBacklinks(files);
-    await openNote(actualName);
-  }, [refreshNotes, refreshBacklinks, openNote]);
-
+  // ─── New folder handler ─────────────────────────────────
   const handleNewFolder = useCallback(() => {
-    setShowNewFolderDialog(true);
-  }, []);
+    modal.setShowNewFolderDialog(true);
+  }, [modal]);
 
   const confirmNewFolder = useCallback(async (folderName: string) => {
-    setShowNewFolderDialog(false);
+    modal.setShowNewFolderDialog(false);
     const result = await window.electronAPI.createFolder(folderName);
     if (!result.ok) {
-      setErrorMessage(`Failed to create folder: ${result.error.message}`);
+      modal.setErrorMessage(`Failed to create folder: ${result.error.message}`);
       return;
     }
     const files = await refreshNotes();
     await refreshBacklinks(files);
-  }, [refreshNotes, refreshBacklinks]);
+  }, [refreshNotes, refreshBacklinks, modal]);
 
-  const handleDailyNote = useCallback(async () => {
-    const today = new Date();
-    const fileName = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}.md`;
-    const files = await refreshNotes();
-    if (files.includes(fileName)) {
-      await openNote(fileName);
-      return;
-    }
-    const result = await window.electronAPI.createNote(fileName);
-    if (!result.ok) {
-      setErrorMessage(`Failed to create daily note: ${result.error.message}`);
-      return;
-    }
-    const newFiles = await refreshNotes();
-    await refreshBacklinks(newFiles);
-    await openNote(fileName);
-  }, [refreshNotes, refreshBacklinks, openNote]);
-
+  // ─── Delete with confirmation ───────────────────────────
   const handleDeleteNote = useCallback((fileName: string) => {
-    setDeletingFile(fileName);
-    setShowDeleteConfirmDialog(true);
-  }, []);
+    modal.setDeletingFile(fileName);
+    modal.setShowDeleteConfirmDialog(true);
+  }, [modal]);
 
   const confirmDelete = useCallback(async () => {
-    if (!deletingFile) return;
-    const fileName = deletingFile;
-    setShowDeleteConfirmDialog(false);
-    setDeletingFile(null);
-    const result = await window.electronAPI.deleteNote(fileName);
-    if (!result.ok) {
-      setErrorMessage(`Failed to delete note: ${result.error.message}`);
-      return;
-    }
-    if (activeNote === fileName) {
-      setActiveNote(null);
-      setRawContent("");
-    }
-    setOpenTabs((prev: Tab[]) => prev.filter((t) => t.id !== fileName));
-    if (activeTabId === fileName) setActiveTabId(null);
-    // Remove from bookmarks
-    setBookmarks((prev: string[]) => prev.filter((b) => b !== fileName));
-    const files = await refreshNotes();
-    await refreshBacklinks(files);
-  }, [deletingFile, activeNote, activeTabId, setActiveNote, setRawContent, setOpenTabs, setActiveTabId, setBookmarks, refreshNotes, refreshBacklinks]);
+    if (!modal.deletingFile) return;
+    const fileName = modal.deletingFile;
+    modal.setShowDeleteConfirmDialog(false);
+    modal.setDeletingFile(null);
+    removeFromVaultIndex(vaultIndexRef.current, fileName);
+    setVaultIndexVersion((v) => v + 1);
+    await noteOps.deleteNote(fileName);
+  }, [modal, noteOps]);
 
   const cancelDelete = useCallback(() => {
-    setShowDeleteConfirmDialog(false);
-    setDeletingFile(null);
-  }, []);
+    modal.setShowDeleteConfirmDialog(false);
+    modal.setDeletingFile(null);
+  }, [modal]);
 
-  const handleRenameNote = useCallback((oldName: string) => {
-    const baseName = oldName.split("/").pop()?.replace(/\.md$/, "") || oldName;
-    setRenamingFile(oldName);
-    setRenameValue(baseName);
-  }, [setRenamingFile, setRenameValue]);
-
+  // ─── Rename confirmation ────────────────────────────────
   const confirmRename = useCallback(async () => {
     if (!renamingFile || !renameValue.trim()) return;
-    const result = await window.electronAPI.renameNote(renamingFile, renameValue.trim());
-    if (!result.ok) {
-      setErrorMessage(`Failed to rename note: ${result.error.message}`);
-      return;
-    }
-    const newPath = result.value;
-    if (activeNote === renamingFile) setActiveNote(newPath);
-    // Synchronize bookmarks
-    setBookmarks((prev: string[]) => prev.map((b) => b === renamingFile ? newPath : b));
-    // Synchronize open tabs
-    setOpenTabs((prev: Tab[]) => prev.map((t) =>
-      t.id === renamingFile ? { ...t, id: newPath, label: newPath.split("/").pop()?.replace(/\.md$/, "") || newPath } : t
-    ));
-    if (activeTabId === renamingFile) setActiveTabId(newPath);
+    await noteOps.renameNote(renamingFile, renameValue.trim());
     setRenamingFile(null);
     setRenameValue("");
-    const files = await refreshNotes();
-    await refreshBacklinks(files);
-  }, [renamingFile, renameValue, activeNote, activeTabId, setActiveNote, setActiveTabId, setBookmarks, setOpenTabs, setRenamingFile, setRenameValue, refreshNotes, refreshBacklinks]);
+  }, [renamingFile, renameValue, noteOps, setRenamingFile, setRenameValue]);
 
-  const handleContentChange = useCallback((value: string) => {
-    setRawContent(value);
-    setSaved(false);
-    if (!activeNote) return;
-    // Track per-note buffer via session coordinator (no more stale-closure race)
-    if (sessionCoordinator.get(activeNote)) {
-      sessionCoordinator.update(activeNote, value);
-    } else {
-      sessionCoordinator.open(activeNote, { buffer: value });
-    }
-    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-    saveTimeoutRef.current = setTimeout(async () => {
-      try {
-        await sessionCoordinator.save(activeNote);
-      } catch (err) {
-        setErrorMessage(`Failed to save note: ${err instanceof Error ? err.message : String(err)}`);
-        return;
-      }
-      setSaved(true);
-      const store = useAppStore.getState();
-      const contents = new Map(store.allContents);
-      contents.set(activeNote, value);
-      setAllContents(contents);
-      setBacklinks(buildBacklinks(contents));
-      setTagIndex(buildTagIndex(contents));
-    }, 500);
-  }, [activeNote, sessionCoordinator, setRawContent, setSaved, setAllContents, setBacklinks, setTagIndex]);
-
-  const handleManualSave = useCallback(async () => {
-    const store = useAppStore.getState();
-    const note = store.activeNote;
-    const content = store.rawContent;
-    if (!note) return;
-    // Track buffer and clear pending autosave
-    if (sessionCoordinator.get(note)) {
-      sessionCoordinator.update(note, content);
-    } else {
-      sessionCoordinator.open(note, { buffer: content });
-    }
-    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-    try {
-      await sessionCoordinator.save(note);
-    } catch (err) {
-      setErrorMessage(`Failed to save note: ${err instanceof Error ? err.message : String(err)}`);
-      return;
-    }
-    setSaved(true);
-    const contents = new Map(store.allContents);
-    contents.set(note, content);
-    setAllContents(contents);
-    setBacklinks(buildBacklinks(contents));
-    setTagIndex(buildTagIndex(contents));
-  }, [sessionCoordinator, setSaved, setAllContents, setBacklinks, setTagIndex]);
-
-  const handleWikiLinkClick = useCallback(async (target: string) => {
-    const fileName = target.endsWith(".md") ? target : `${target}.md`;
-    const currentNotes = useAppStore.getState().notes;
-    if (currentNotes.includes(fileName)) {
-      await openNote(fileName);
-    } else {
-      setWikiTarget(fileName);
-      setShowWikiCreateDialog(true);
-    }
-  }, [openNote]);
-
+  // ─── Wiki create confirmation ───────────────────────────
   const confirmWikiCreate = useCallback(async (noteName: string) => {
-    setShowWikiCreateDialog(false);
-    setWikiTarget(null);
-    const result = await window.electronAPI.createNote(noteName);
-    if (!result.ok) {
-      setErrorMessage(`Failed to create note: ${result.error.message}`);
-      return;
-    }
-    const files = await refreshNotes();
-    await refreshBacklinks(files);
-    await openNote(noteName);
-  }, [refreshNotes, refreshBacklinks, openNote]);
+    modal.setShowWikiCreateDialog(false);
+    modal.setWikiTarget(null);
+    await noteOps.createWikiNote(noteName);
+  }, [modal, noteOps]);
 
   const cancelWikiCreate = useCallback(() => {
-    setShowWikiCreateDialog(false);
-    setWikiTarget(null);
-  }, []);
+    modal.setShowWikiCreateDialog(false);
+    modal.setWikiTarget(null);
+  }, [modal]);
 
+  // ─── Template insert ────────────────────────────────────
   const handleInsertTemplate = useCallback((content: string) => {
     setRawContent(content);
     handleContentChange(content);
   }, [setRawContent, handleContentChange]);
 
-  const togglePreview = useCallback(() => setPreviewMode(!useAppStore.getState().previewMode), [setPreviewMode]);
+  // ─── Export handlers ─────────────────────────────────────
+  const handleExportNote = useCallback(async () => {
+    if (!activeNote) return;
+    const result = await window.electronAPI.exportNote(activeNote);
+    if (!result.ok) showToast("error", `Export failed: ${result.error.message}`);
+    else showToast("info", `Exported to ${result.value}`);
+  }, [activeNote, showToast]);
 
-  const toggleSplitView = useCallback(() => {
-    const next = !splitView;
-    setSplitView(next);
-    try { localStorage.setItem("void-split-view", String(next)); } catch {}
-  }, [splitView]);
+  const handleExportVaultZip = useCallback(async () => {
+    const result = await window.electronAPI.exportVaultZip();
+    if (!result.ok) showToast("error", `Export failed: ${result.error.message}`);
+    else showToast("info", `Exported to ${result.value}`);
+  }, [showToast]);
 
-  // ─── Keep refs for keyboard handler ─────────────────────
-  const handleManualSaveRef = useRef(handleManualSave);
-  const handleNewNoteRef = useRef(handleNewNote);
-  const handleDailyNoteRef = useRef(handleDailyNote);
+  const handleExportNoteHtml = useCallback(async () => {
+    if (!activeNote) return;
+    const result = await window.electronAPI.exportNoteHtml(activeNote);
+    if (!result.ok) showToast("error", `Export failed: ${result.error.message}`);
+    else showToast("info", `Exported to ${result.value}`);
+  }, [activeNote, showToast]);
 
-  useEffect(() => { handleManualSaveRef.current = handleManualSave; }, [handleManualSave]);
-  useEffect(() => { handleNewNoteRef.current = handleNewNote; }, [handleNewNote]);
-  useEffect(() => { handleDailyNoteRef.current = handleDailyNote; }, [handleDailyNote]);
+  // ─── Active panel ───────────────────────────────────────
+  const activePanel: ActivePanel = showGraph ? "graph"
+    : showTemplates ? "templates"
+    : showBookmarks ? "bookmarks"
+    : showCanvas ? "canvas"
+    : null;
 
-  const handleSplitMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    const container = document.querySelector(".pane-container");
-    if (!container) return;
-    const isVertical = container.classList.contains("split-down");
-    const rect = container.getBoundingClientRect();
-    const startPos = isVertical ? e.clientY : e.clientX;
-    const startSize = isVertical ? rect.height : rect.width;
-    const startRatio = splitRatioRef.current;
-
-    // Get the editor and preview DOM elements for direct manipulation
-    const editorEl = container.querySelector(".pane-editor") as HTMLElement | null;
-    const previewEl = container.querySelector(".pane-preview") as HTMLElement | null;
-
-    // Hide preview during drag to avoid expensive re-renders
-    const originalPreviewOpacity = previewEl?.style.opacity || "1";
-    const originalPreviewPointer = previewEl?.style.pointerEvents || "auto";
-    if (previewEl) {
-      previewEl.style.opacity = "0.3";
-      previewEl.style.pointerEvents = "none";
-      previewEl.style.transition = "none";
-    }
-
-    const onMove = (ev: MouseEvent) => {
-      const delta = (isVertical ? ev.clientY : ev.clientX) - startPos;
-      const ratio = Math.min(0.9, Math.max(0.1, startRatio + delta / startSize));
-      splitRatioRef.current = ratio;
-      // Direct DOM update - no React re-render during drag
-      if (editorEl) editorEl.style.flex = `0 0 ${ratio * 100}%`;
-      if (previewEl) previewEl.style.flex = `0 0 ${(1 - ratio) * 100}%`;
-    };
-
-    const onUp = () => {
-      document.removeEventListener("mousemove", onMove);
-      document.removeEventListener("mouseup", onUp);
-      
-      // Restore preview visibility
-      if (previewEl) {
-        previewEl.style.opacity = originalPreviewOpacity;
-        previewEl.style.pointerEvents = originalPreviewPointer;
-        previewEl.style.transition = "";
-      }
-      
-      // Commit final ratio from ref to local state (single re-render after drag)
-      const finalRatio = splitRatioRef.current;
-      setSplitRatio(finalRatio);
-      try { localStorage.setItem("void-split-ratio", String(finalRatio)); } catch {}
-    };
-
-    document.addEventListener("mousemove", onMove);
-    document.addEventListener("mouseup", onUp);
-  }, []);
-
-  const handleSwitchVault = useCallback(async () => {
-    setShowSettings(false);
-    const result = await window.electronAPI.selectVault();
-    if (!result.ok) {
-      setErrorMessage(`Failed to select vault: ${result.error.message}`);
-      return;
-    }
-    const selectedPath = result.value;
-    const setResult = await window.electronAPI.setVault(selectedPath);
-    if (!setResult.ok) {
-      setErrorMessage(`Failed to set vault: ${setResult.error.message}`);
-      return;
-    }
-    setVaultPath(selectedPath);
-    const files = await refreshNotes();
-    await refreshBacklinks(files);
-    if (files.length > 0) openNote(files[0]);
-  }, [setShowSettings, setVaultPath, refreshNotes, refreshBacklinks, openNote]);
-
+  // ─── External watcher integration ────────────────────────
   useEffect(() => {
     if (!vaultReady) return;
-    refreshNotes().then((files) => {
-      refreshBacklinks(files);
-      if (files.length > 0) openNote(files[0]);
-    });
-  }, [vaultReady]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ─── Close handshake ────────────────────────────────────
-  useEffect(() => {
-    const cleanup = window.electronAPI.onCloseRequested(async () => {
-      // Flush all pending saves before closing
-      try {
-        await sessionCoordinator.flush();
-        await window.electronAPI.closeReady();
-      } catch (error) {
-        setErrorMessage(`Failed to save changes before closing: ${error instanceof Error ? error.message : String(error)}`);
+    const unsubscribe = window.electronAPI.onExternalChange?.((change) => {
+      const state = useAppStore.getState();
+      const openTabIds = state.openTabs.map((t) => t.id);
+      const isOpen = openTabIds.includes(change.path);
+
+      if (change.type === "deleted") {
+        if (isOpen) {
+          showToast("warning", `"${change.path.split("/").pop()}" was deleted externally.`);
+        }
+        refreshNotes().then((files) => refreshBacklinks(files));
+        return;
+      }
+
+      if (!isOpen) {
+        // Reload content silently
+        refreshNotes().then((files) => refreshBacklinks(files));
+        return;
+      }
+
+      // Note is open
+      const session = sessionCoordinator.get(change.path);
+      if (session?.dirty) {
+        showToast("warning", `File "${change.path.split("/").pop()}" changed externally. Your unsaved changes take priority. Save or discard to see the external version.`);
+      } else {
+        // Reload content
+        window.electronAPI.loadNote(change.path).then((result) => {
+          if (result.ok) {
+            if (state.activeNote === change.path) {
+              setRawContent(result.value);
+            }
+            sessionCoordinator.open(change.path, { buffer: result.value });
+            // Update allContents
+            const contents = new Map(useAppStore.getState().allContents);
+            contents.set(change.path, result.value);
+            useAppStore.getState().setAllContents(contents);
+            useAppStore.getState().setBacklinks(buildBacklinks(contents));
+          }
+        });
+        showToast("info", `Note "${change.path.split("/").pop()}" updated from external change.`);
       }
     });
-    return cleanup;
-  }, [sessionCoordinator]);
 
-  // ─── Keyboard shortcuts ─────────────────────────────────
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      const active = document.activeElement as HTMLElement | null;
-      const inEditor = active?.closest(".cm-editor") !== null;
-
-      if (e.ctrlKey && e.key === "e") { e.preventDefault(); togglePreview(); }
-      if (e.ctrlKey && e.shiftKey && e.key === "E") { e.preventDefault(); toggleSplitView(); }
-      if (e.ctrlKey && e.key === "p") { if (!inEditor) { e.preventDefault(); setShowSearch((v: boolean) => !v); } }
-      if (e.ctrlKey && e.shiftKey && e.key === "F") { e.preventDefault(); setShowGlobalSearch((v: boolean) => !v); }
-      if (e.ctrlKey && e.key === "t") { if (!inEditor) { e.preventDefault(); setShowTemplates((v: boolean) => !v); } }
-      if (e.ctrlKey && e.key === "s") { e.preventDefault(); handleManualSaveRef.current(); }
-      if (e.ctrlKey && e.key === "n") { e.preventDefault(); handleNewNoteRef.current(); }
-      if (e.ctrlKey && e.shiftKey && e.key === "N") { e.preventDefault(); handleDailyNoteRef.current(); }
-      if (e.ctrlKey && e.key === ",") { e.preventDefault(); setShowSettings((v: boolean) => !v); }
-      if (e.key === "F1") { e.preventDefault(); setShowHelp((v: boolean) => !v); }
-      if (e.key === "F9") { e.preventDefault(); setFocusMode((v: boolean) => !v); }
+    return () => {
+      unsubscribe?.();
     };
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
-  }, [togglePreview, toggleSplitView, setShowSearch, setShowGlobalSearch, setShowTemplates, setShowSettings, setShowHelp, setFocusMode]);
+  }, [vaultReady]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleTabSelect = useCallback((id: string) => { openNote(id); }, [openNote]);
-  const closeTab = useCallback((id: string) => {
-    const currentTabs = useAppStore.getState().openTabs;
-    const remaining = currentTabs.filter((t) => t.id !== id);
-    setOpenTabs(remaining);
-    if (activeTabId === id) {
-      const nextTab = nearestNeighborAfterClose(currentTabs.map((t) => t.id), id);
-      if (nextTab) openNote(nextTab);
-      else { setActiveNote(null); setRawContent(""); setActiveTabId(null); }
-    }
-  }, [activeTabId, setOpenTabs, setActiveNote, setRawContent, setActiveTabId, openNote]);
-
-  const handleTabClose = useCallback((id: string) => {
-    const session = sessionCoordinator.get(id);
-    if (session?.dirty) {
-      setClosingTabId(id);
-      setShowCloseConfirmDialog(true);
-      return;
-    }
-    closeTab(id);
-  }, [sessionCoordinator, closeTab]);
-
-  const handleSaveAndClose = useCallback(async () => {
-    if (!closingTabId) return;
+  // ─── Image paste/drop handler ────────────────────────────
+  const handleImagePaste = useCallback(async (file: File): Promise<string | null> => {
     try {
-      await sessionCoordinator.save(closingTabId);
-      closeTab(closingTabId);
+      // Derive extension from the MIME type (file.type), not from file.name
+      // Clipboard images often have empty or unreliable names
+      const mimeExt: Record<string, string> = {
+        "image/png": "png", "image/jpeg": "jpg", "image/gif": "gif",
+        "image/webp": "webp", "image/svg+xml": "svg", "image/bmp": "bmp",
+      };
+      const ext = mimeExt[file.type] ?? "png";
+      const timestamp = Date.now();
+      const fileName = `past-image-${timestamp}.${ext}`;
+      const relativePath = `attachments/${fileName}`;
+
+      const arrayBuffer = await file.arrayBuffer();
+      const data = Array.from(new Uint8Array(arrayBuffer));
+
+      const result = await window.electronAPI.writeFile(relativePath, data);
+      if (!result.ok) {
+        showToast("error", `Failed to save image: ${result.error.message}`);
+        return null;
+      }
+      return relativePath;
     } catch (err) {
-      setErrorMessage(`Failed to save note: ${err instanceof Error ? err.message : String(err)}`);
+      showToast("error", `Failed to process image: ${err instanceof Error ? err.message : String(err)}`);
+      return null;
     }
-    setShowCloseConfirmDialog(false);
-    setClosingTabId(null);
-  }, [closingTabId, sessionCoordinator, closeTab]);
+  }, [showToast]);
 
-  const handleDiscardAndClose = useCallback(() => {
-    if (!closingTabId) return;
-    sessionCoordinator.delete(closingTabId);
-    closeTab(closingTabId);
-    setShowCloseConfirmDialog(false);
-    setClosingTabId(null);
-  }, [closingTabId, sessionCoordinator, closeTab]);
-
-  const handleCancelClose = useCallback(() => {
-    setShowCloseConfirmDialog(false);
-    setClosingTabId(null);
-  }, []);
-
-  const handleTabReorder = useCallback((fromIndex: number, toIndex: number) => {
-    setOpenTabs((prev: Tab[]) => { const next = [...prev]; const [moved] = next.splice(fromIndex, 1); next.splice(toIndex, 0, moved); return next; });
-  }, [setOpenTabs]);
-
-  // ─── Active panel for ribbon ────────────────────────────
-  const activePanel: ActivePanel = showGraph ? "graph" : showTemplates ? "templates" : showBookmarks ? "bookmarks" : showCanvas ? "canvas" : null;
+  // ─── Render ──────────────────────────────────────────────
 
   if (!vaultReady) return <VaultSetup onVaultSelect={handleVaultSelect} />;
 
   return (
-    <div className="app">
+    <div className={`app theme-transition${focusMode ? " focus-mode" : ""}`}>
       {!focusMode && (
-        <LeftRibbon
-          onNewNote={handleNewNote}
-          onNewFolder={handleNewFolder}
-          onOpenGraph={() => setShowGraph(!showGraph)}
-          onDailyNote={handleDailyNote}
-          onOpenTemplates={() => setShowTemplates(true)}
-          onOpenBookmarks={() => setShowBookmarks(true)}
-          onOpenCanvas={() => setShowCanvas(true)}
-          onOpenTrash={() => setShowTrash(true)}
-          onOpenSettings={() => setShowSettings(true)}
-          onOpenSearch={() => setShowSearch(true)}
-          activePanel={activePanel}
-        />
+        <LeftRibbon onNewNote={noteOps.handleNewNote} onNewFolder={handleNewFolder} onOpenGraph={() => setShowGraph(!showGraph)} onDailyNote={noteOps.createDailyNote} onOpenTemplates={() => setShowTemplates((v: boolean) => !v)} onOpenBookmarks={() => setShowBookmarks((v: boolean) => !v)} onOpenCanvas={() => setShowCanvas((v: boolean) => !v)} onOpenTrash={() => modal.setShowTrash((v: boolean) => !v)} onOpenSettings={() => setShowSettings((v: boolean) => !v)} onOpenSearch={() => setShowSearch((v: boolean) => !v)} activePanel={activePanel} />
       )}
       {!focusMode && (
         <ResizablePanel side="left" defaultWidth={240} minWidth={180} maxWidth={400} storageKey="void-sidebar-width">
-          <Sidebar
-            notes={filteredNotes}
-            allNotes={notes}
-            activeNote={activeNote}
-            focusMode={focusMode}
-            vaultPath={vaultPath}
-            tags={sortedTags}
-            selectedTags={selectedTags}
-            bookmarks={bookmarks}
-            onToggleTag={toggleTag}
-            onToggleFocusMode={() => setFocusMode((v: boolean) => !v)}
-            onSelect={openNote}
-            onNew={handleNewNote}
-            onDelete={handleDeleteNote}
-            onRename={handleRenameNote}
-            onToggleBookmark={toggleBookmark}
-            onOpenSearch={() => setShowSearch(true)}
-            onOpenSettings={() => setShowSettings(true)}
-            onOpenHelp={() => setShowHelp(true)}
-          />
+          <Sidebar notes={filteredNotes} allNotes={notes} activeNote={activeNote} focusMode={focusMode} vaultPath={vaultPath} tags={sortedTags} selectedTags={selectedTags} bookmarks={bookmarks} pinnedNotes={pinnedNotes} onToggleTag={toggleTag} onToggleFocusMode={() => setFocusMode((v: boolean) => !v)} onSelect={noteOps.openNote} onNew={noteOps.handleNewNote} onDelete={handleDeleteNote} onRename={noteOps.handleRenameNote} onToggleBookmark={toggleBookmark} onTogglePin={togglePin} onDailyNote={noteOps.createDailyNote} onOpenSearch={() => setShowSearch((v: boolean) => !v)} onOpenHelp={() => setShowHelp((v: boolean) => !v)} />
         </ResizablePanel>
       )}
-      <div className="editor-area">
-        {!focusMode && openTabs.length > 0 && (
-          <TabBar tabs={openTabs} activeTab={activeTabId} onSelect={handleTabSelect} onClose={handleTabClose} onReorder={handleTabReorder} />
-        )}
-        <div className="top-bar">
-          <div className="top-bar-left">
-            {focusMode && (
-              <button className="btn-icon focus-restore-btn-inline" onClick={() => setFocusMode(false)} title="Show sidebar (F9)">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-              </button>
-            )}
-            <div className="breadcrumb">{activeNote ? <span className="breadcrumb-current">{activeNote.split("/").pop()?.replace(/\.md$/, "") || ""}</span> : <span>No note open</span>}</div>
-          </div>
-          <div className="top-bar-actions">
-            <button className={`btn-mode ${!splitView ? "active" : ""}`} onClick={() => { setPreviewMode((v: boolean) => !v); setSplitView(false); setSplitDown(false); }}>{previewMode ? "Edit" : "Preview"}</button>
-            <button className={`btn-mode ${showRightPanel ? "active" : ""}`} onClick={() => setShowRightPanel((v: boolean) => !v)} title="Toggle right panel">Panel</button>
-            <div className="top-bar-separator" />
-            <TrafficLights />
-          </div>
-        </div>
-        <div className="main-content">
-          <div className={`pane-container ${splitView ? "split-view" : ""} ${splitDown ? "split-down" : ""}`}>
-            {splitView && activeNote ? (
-              <>
-                <div className="pane-editor pane-enter" style={{ "--pane-ratio": splitRatio } as React.CSSProperties}>
-                  <div className="editor-wrapper"><Suspense fallback={<div className="editor-placeholder" />}><NoteEditor content={rawContent} onChange={handleContentChange} noteNames={notes} vimMode={vimMode} readableLineLength={readableLineLength} editorFont={editorFont} /></Suspense></div>
-                </div>
-                <div className="split-divider split-divider-h" onMouseDown={handleSplitMouseDown} />
-                <NoteParser content={rawContent} noteNames={notes} className="pane-preview" style={{ "--pane-ratio": 1 - splitRatio } as React.CSSProperties} onWikiLinkClick={handleWikiLinkClick} />
-              </>
-            ) : splitDown && activeNote ? (
-              <>
-                <div className="pane-editor pane-enter" style={{ "--pane-ratio": splitRatio } as React.CSSProperties}>
-                  <div className="editor-wrapper"><Suspense fallback={<div className="editor-placeholder" />}><NoteEditor content={rawContent} onChange={handleContentChange} noteNames={notes} vimMode={vimMode} readableLineLength={readableLineLength} editorFont={editorFont} /></Suspense></div>
-                </div>
-                <div className="split-divider split-divider-v" onMouseDown={handleSplitMouseDown} />
-                <NoteParser content={rawContent} noteNames={notes} className="pane-preview" style={{ "--pane-ratio": 1 - splitRatio } as React.CSSProperties} onWikiLinkClick={handleWikiLinkClick} />
-              </>
-            ) : (
-              <>
-                {!previewMode && activeNote && <div className="pane-editor pane-enter"><div className="editor-wrapper"><Suspense fallback={<div className="editor-placeholder" />}><NoteEditor content={rawContent} onChange={handleContentChange} noteNames={notes} vimMode={vimMode} readableLineLength={readableLineLength} editorFont={editorFont} /></Suspense></div></div>}
-                {previewMode && activeNote && <NoteParser content={rawContent} noteNames={notes} onWikiLinkClick={handleWikiLinkClick} />}
-              </>
-            )}
-          </div>
-          {showRightPanel && activeNote && (
-            <RightPanel
-              activeNote={activeNote}
-              content={rawContent}
-              backlinks={noteBacklinks}
-              tags={sortedTags}
-              onNavigate={openNote}
-              activePanelTab={activePanelTab}
-              onPanelTabChange={setActivePanelTab}
-              onContentSave={handleContentChange}
-              splitView={splitView}
-              splitDown={splitDown}
-              onToggleSplit={toggleSplitView}
-              onToggleSplitDown={() => { setSplitDown(v => !v); setSplitView(false); }}
-            />
-          )}
-        </div>
-        <StatusBar content={rawContent} noteCount={notes.length} activeNote={activeNote} saved={saved} />
-      </div>
-      {showSearch && <CommandPalette notes={notes} onSelect={(file: string) => { setShowSearch(false); openNote(file); }} onClose={() => setShowSearch(false)} />}
+      <EditorArea
+        focusMode={focusMode}
+        openTabs={openTabs}
+        activeTabId={activeTabId}
+        activeNote={activeNote}
+        rawContent={rawContent}
+        previewMode={previewMode}
+        saved={saved}
+        notes={notes}
+        vimMode={vimMode}
+        readableLineLength={readableLineLength}
+        editorFont={editorFont}
+        showRightPanel={showRightPanel}
+        activePanelTab={activePanelTab}
+        splitView={splitView}
+        noteBacklinks={noteBacklinks}
+        sortedTags={sortedTags}
+        onTabSelect={handleTabSelect}
+        onTabClose={handleTabClose}
+        onTabReorder={handleTabReorder}
+        onContentChange={handleContentChange}
+        onPreviewToggle={togglePreview}
+        onRightPanelToggle={() => setShowRightPanel((v: boolean) => !v)}
+        onFocusModeExit={() => setFocusMode(false)}
+        onActivePanelTabChange={setActivePanelTab}
+        onNavigate={noteOps.handleWikiLinkClick}
+        onImagePaste={handleImagePaste}
+        spellcheck={spellcheckStore}
+      />
+      {showSearch && <CommandPalette notes={notes} onSelect={(file: string) => { setShowSearch(false); noteOps.openNote(file); }} onClose={() => setShowSearch(false)} />}
       {showSettings && (
-        <Suspense fallback={<LazyFallback />}>
-          <ErrorBoundary name="Settings">
-          <Settings
-            onClose={() => setShowSettings(false)}
-            onSwitchVault={handleSwitchVault}
-            theme={theme}
-            onThemeChange={setTheme}
-            vaultPath={vaultPath}
-            vimMode={vimMode}
-            onVimModeChange={setVimMode}
-            readableLineLength={readableLineLength}
-            onReadableLineLengthChange={setReadableLineLength}
-            editorFont={editorFont}
-            onEditorFontChange={setEditorFont}
-            spellcheck={spellcheckStore}
-            onSpellcheckChange={setSpellcheck}
-          />
-          </ErrorBoundary>
-        </Suspense>
+        <SettingsWrapper
+          onClose={() => setShowSettings(false)}
+          onSwitchVault={async () => {
+            const files = await handleSwitchVault();
+            rebuildFullIndex();
+            if (files && files.length > 0) noteOps.openNote(files[0]);
+          }}
+          theme={theme}
+          onThemeChange={setTheme}
+          vaultPath={vaultPath}
+          vimMode={vimMode}
+          onVimModeChange={setVimMode}
+          readableLineLength={readableLineLength}
+          onReadableLineLengthChange={setReadableLineLength}
+          editorFont={editorFont}
+          onEditorFontChange={setEditorFont}
+          spellcheck={spellcheckStore}
+          onSpellcheckChange={setSpellcheck}
+          autoUpdate={autoUpdate}
+          onAutoUpdateChange={setAutoUpdate}
+          dailyNoteTemplate={dailyNoteTemplate}
+          onDailyNoteTemplateChange={setDailyNoteTemplate}
+          activeNote={activeNote}
+          onExportNote={handleExportNote}
+          onExportVaultZip={handleExportVaultZip}
+          onExportNoteHtml={handleExportNoteHtml}
+          onOpenVaultStats={() => { setShowSettings(false); setShowVaultStats(true); }}
+        />
       )}
-      {showHelp && <Suspense fallback={<LazyFallback />}><ErrorBoundary name="Help"><Help onClose={() => setShowHelp(false)} /></ErrorBoundary></Suspense>}
+      {showHelp && <LazyPanel name="Help" component={Help} componentProps={{ onClose: () => setShowHelp(false) }} />}
       {showGraph && (
-        <Suspense fallback={<LazyFallback />}>
-          <ErrorBoundary name="GraphView">
-          <GraphView notes={notes} backlinks={backlinksStore} activeNote={activeNote} onNodeClick={(note: string) => { setShowGraph(false); openNote(note); }} onClose={() => setShowGraph(false)} />
-          </ErrorBoundary>
-        </Suspense>
+        <LazyPanel name="GraphView" component={GraphView} componentProps={{ notes, allContents, backlinks: backlinksStore, activeNote, onNodeClick: (note: string) => { setShowGraph(false); noteOps.openNote(note); }, onClose: () => setShowGraph(false) }} />
       )}
       {showGlobalSearch && (
-        <Suspense fallback={<LazyFallback />}>
-          <ErrorBoundary name="GlobalSearch">
-          <GlobalSearch notes={notes} contents={allContents} vaultIndex={vaultIndex} onSelect={(note: string) => { setShowGlobalSearch(false); openNote(note); }} onClose={() => setShowGlobalSearch(false)} />
-          </ErrorBoundary>
-        </Suspense>
+        <LazyPanel name="GlobalSearch" component={GlobalSearch} componentProps={{ notes, contents: allContents, vaultIndex: vaultIndexRef.current, onSelect: (note: string) => { setShowGlobalSearch(false); noteOps.openNote(note); }, onClose: () => setShowGlobalSearch(false) }} />
       )}
       {showTemplates && (
-        <Suspense fallback={<LazyFallback />}><ErrorBoundary name="Templates"><TemplatesPanel onInsertTemplate={handleInsertTemplate} onClose={() => setShowTemplates(false)} /></ErrorBoundary></Suspense>
+        <LazyPanel name="Templates" component={TemplatesPanel} componentProps={{ onInsertTemplate: handleInsertTemplate, onClose: () => setShowTemplates(false) }} />
       )}
       {showBookmarks && (
-        <Suspense fallback={<LazyFallback />}>
-          <ErrorBoundary name="Bookmarks">
-          <BookmarksPanel bookmarks={bookmarks} activeNote={activeNote} onToggleBookmark={toggleBookmark} onSelect={(note: string) => { setShowBookmarks(false); openNote(note); }} onClose={() => setShowBookmarks(false)} />
-          </ErrorBoundary>
-        </Suspense>
+        <LazyPanel name="Bookmarks" component={BookmarksPanel} componentProps={{ bookmarks, activeNote, onToggleBookmark: toggleBookmark, onSelect: (note: string) => { setShowBookmarks(false); noteOps.openNote(note); }, onClose: () => setShowBookmarks(false) }} />
       )}
       {showCanvas && (
-        <Suspense fallback={<LazyFallback />}><ErrorBoundary name="Canvas"><CanvasView vaultPath={vaultPath} onClose={() => setShowCanvas(false)} /></ErrorBoundary></Suspense>
+        <LazyPanel name="Canvas" component={CanvasView} componentProps={{ vaultPath, onClose: () => setShowCanvas(false) }} />
       )}
-      {showTrash && (
-        <Suspense fallback={<LazyFallback />}>
-          <ErrorBoundary name="Trash">
-            <TrashPanel onClose={() => setShowTrash(false)} onRestore={async () => { const files = await refreshNotes(); await refreshBacklinks(files); }} />
-          </ErrorBoundary>
-        </Suspense>
+      {modal.showTrash && (
+        <LazyPanel name="Trash" component={TrashPanel} componentProps={{ onClose: () => modal.setShowTrash(false), onRestore: async () => { const files = await refreshNotes(); await refreshBacklinks(files); rebuildFullIndex(); } }} />
+      )}
+      {showVaultStats && (
+        <LazyPanel name="VaultStats" component={VaultStats} componentProps={{ onClose: () => setShowVaultStats(false) }} />
       )}
       {renamingFile && (
-        <div className="modal-overlay" onClick={() => setRenamingFile(null)}>
-          <div className="modal modal-sm" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2 className="modal-title">Rename Note</h2>
-              <button className="btn-icon" onClick={() => setRenamingFile(null)}>&times;</button>
-            </div>
-            <div className="modal-body">
-              <input className="rename-input" value={renameValue} onChange={(e) => setRenameValue(e.currentTarget.value)} onKeyDown={(e) => { if (e.key === "Enter") confirmRename(); if (e.key === "Escape") setRenamingFile(null); }} autoFocus />
-              <div className="modal-actions">
-                <button className="btn-secondary" onClick={() => setRenamingFile(null)}>Cancel</button>
-                <button className="btn-secondary btn-accent" onClick={confirmRename}>Rename</button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <RenameModal
+          renameValue={renameValue}
+          onRenameValueChange={setRenameValue}
+          onConfirm={confirmRename}
+          onCancel={() => setRenamingFile(null)}
+        />
       )}
-      <InputDialog
-        open={showNewNoteDialog}
-        title="New Note"
-        message="Enter note name:"
-        placeholder="note-name"
-        confirmLabel="Create"
-        onConfirm={confirmNewNote}
-        onCancel={() => setShowNewNoteDialog(false)}
+      <AppOverlays
+        showRename={!!renamingFile}
+        renameValue={renameValue}
+        onRenameValueChange={setRenameValue}
+        onRenameConfirm={confirmRename}
+        onRenameCancel={() => setRenamingFile(null)}
+        showNewNote={modal.showNewNoteDialog}
+        onCreateNote={(name) => { modal.setShowNewNoteDialog(false); noteOps.createNote(name); }}
+        onCancelNewNote={() => modal.setShowNewNoteDialog(false)}
+        showNewFolder={modal.showNewFolderDialog}
+        onCreateFolder={confirmNewFolder}
+        onCancelNewFolder={() => modal.setShowNewFolderDialog(false)}
+        showWikiCreate={modal.showWikiCreateDialog}
+        wikiTarget={modal.wikiTarget}
+        onWikiConfirm={confirmWikiCreate}
+        onWikiCancel={cancelWikiCreate}
+        showCloseConfirm={modal.showCloseConfirmDialog}
+        closingTabId={modal.closingTabId}
+        onSaveAndClose={handleSaveAndClose}
+        onDiscardAndClose={handleDiscardAndClose}
+        onCancelClose={handleCancelClose}
+        showDeleteConfirm={modal.showDeleteConfirmDialog}
+        deletingFile={modal.deletingFile}
+        onConfirmDelete={confirmDelete}
+        onCancelDelete={cancelDelete}
+        toasts={toasts}
+        onDismissToast={dismissToast}
       />
-      <InputDialog
-        open={showNewFolderDialog}
-        title="New Folder"
-        message="Enter folder name:"
-        placeholder="folder-name"
-        confirmLabel="Create"
-        onConfirm={confirmNewFolder}
-        onCancel={() => setShowNewFolderDialog(false)}
-      />
-      <InputDialog
-        open={showWikiCreateDialog}
-        title="Create Note"
-        message={`Note "${wikiTarget?.split("/").pop()?.replace(/\.md$/, "") || ""}" does not exist. Create it?`}
-        placeholder="Enter note name"
-        defaultValue={wikiTarget?.replace(/\.md$/, "") || ""}
-        confirmLabel="Create"
-        onConfirm={confirmWikiCreate}
-        onCancel={cancelWikiCreate}
-      />
-      <ConfirmDialog
-        open={showCloseConfirmDialog}
-        title="Unsaved Changes"
-        message={`"${closingTabId?.split("/").pop()?.replace(/\.md$/, "") || ""}" has unsaved changes.`}
-        variant="save-discard"
-        onConfirm={handleSaveAndClose}
-        onDiscard={handleDiscardAndClose}
-        onCancel={handleCancelClose}
-      />
-      <ConfirmDialog
-        open={showDeleteConfirmDialog}
-        title="Delete Note"
-        message={`Are you sure you want to delete "${deletingFile?.split("/").pop()?.replace(/\.md$/, "") || ""}"? The file will be moved to trash.`}
-        variant="destructive"
-        confirmLabel="Delete"
-        onConfirm={confirmDelete}
-        onCancel={cancelDelete}
-      />
-      {errorMessage && (
-        <div className="toast-error" onClick={() => setErrorMessage(null)}>
-          {errorMessage}
-        </div>
+      {updateFlow.updateInfo && (
+        <UpdateDialog
+          updateInfo={updateFlow.updateInfo}
+          downloadProgress={updateFlow.downloadProgress}
+          updateDownloaded={updateFlow.updateDownloaded}
+          onUpdate={updateFlow.handleUpdateNow}
+          onSkip={updateFlow.handleSkipUpdate}
+          onDismiss={updateFlow.handleDismissUpdate}
+        />
       )}
     </div>
   );

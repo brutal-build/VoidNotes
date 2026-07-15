@@ -1,5 +1,6 @@
 import matter from "gray-matter";
 import { extractWikiLinks } from "../plugins/wiki-links-utils";
+import { extractTags } from "./tag-utils";
 
 export interface FrontmatterData {
   title?: string;
@@ -44,13 +45,7 @@ export function buildBacklinks(allNotes: Map<string, string>): Map<string, strin
 }
 
 export function extractInlineTags(content: string): string[] {
-  const regex = /(?<=^|\s)#([a-zA-Z0-9_-]+)/g;
-  const tags: string[] = [];
-  let match;
-  while ((match = regex.exec(content)) !== null) {
-    tags.push(match[1].toLowerCase());
-  }
-  return tags;
+  return extractTags(content).map(t => t.toLowerCase());
 }
 
 export function buildTagIndex(allNotes: Map<string, string>): Map<string, string[]> {

@@ -1,14 +1,11 @@
 import React from "react";
 import { APP_VERSION } from "../plugins/updater";
 import type { ThemeName } from "../types";
-
-const THEMES: { name: ThemeName; label: string; colors: { bg: string; accent: string; text: string } }[] = [
+const THEMES: { name: ThemeName; label: string; colors: { bg: string; accent: string; text: string } | null }[] = [
   { name: "obsidian", label: "Obsidian", colors: { bg: "#1e1e1e", accent: "#8a70d6", text: "#e0e0e0" } },
   { name: "light", label: "Light", colors: { bg: "#ffffff", accent: "#7c5cbf", text: "#1a1a1a" } },
-  { name: "dracula", label: "Dracula", colors: { bg: "#282a36", accent: "#bd93f9", text: "#f8f8f2" } },
-  { name: "nord", label: "Nord", colors: { bg: "#2e3440", accent: "#88c0d0", text: "#eceff4" } },
-  { name: "solarized", label: "Solarized", colors: { bg: "#002b36", accent: "#268bd2", text: "#93a1a1" } },
   { name: "macos", label: "macOS", colors: { bg: "#1a1a1a", accent: "#007AFF", text: "#e0e0e0" } },
+  { name: "system", label: "System", colors: null },
 ];
 
 const FONTS = [
@@ -32,6 +29,15 @@ interface SettingsProps {
   onEditorFontChange: (font: string) => void;
   spellcheck: boolean;
   onSpellcheckChange: (v: boolean) => void;
+  autoUpdate: boolean;
+  onAutoUpdateChange: (v: boolean) => void;
+  dailyNoteTemplate: string;
+  onDailyNoteTemplateChange: (v: string) => void;
+  activeNote: string | null;
+  onExportNote: () => Promise<void>;
+  onExportVaultZip: () => Promise<void>;
+  onExportNoteHtml: () => Promise<void>;
+  onOpenVaultStats: () => void;
 }
 
 export default function Settings({
@@ -48,6 +54,15 @@ export default function Settings({
   onEditorFontChange,
   spellcheck,
   onSpellcheckChange,
+  autoUpdate,
+  onAutoUpdateChange,
+  dailyNoteTemplate,
+  onDailyNoteTemplateChange,
+  activeNote,
+  onExportNote,
+  onExportVaultZip,
+  onExportNoteHtml,
+  onOpenVaultStats,
 }: SettingsProps) {
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -67,11 +82,19 @@ export default function Settings({
                   className={`theme-option ${theme === t.name ? "active" : ""}`}
                   onClick={() => onThemeChange(t.name)}
                 >
-                  <div className="theme-preview">
-                    <div className="theme-preview-bg" style={{ background: t.colors.bg }} />
-                    <div className="theme-preview-accent" style={{ background: t.colors.accent }} />
-                    <div className="theme-preview-text" style={{ background: t.colors.text }} />
-                  </div>
+                  {t.colors ? (
+                    <div className="theme-preview">
+                      <div className="theme-preview-bg" style={{ background: t.colors.bg }} />
+                      <div className="theme-preview-accent" style={{ background: t.colors.accent }} />
+                      <div className="theme-preview-text" style={{ background: t.colors.text }} />
+                    </div>
+                  ) : (
+                    <div className="theme-preview theme-preview-system">
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5">
+                        <circle cx="12" cy="12" r="6" strokeDasharray="0 12"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2"/>
+                      </svg>
+                    </div>
+                  )}
                   <span className="theme-name">{t.label}</span>
                 </div>
               ))}
@@ -128,6 +151,54 @@ export default function Settings({
               </button>
             </div>
             <p className="settings-hint">Enable browser spellcheck in the editor.</p>
+
+            <div className="settings-toggle-row" style={{ marginTop: "var(--space-md)" }}>
+              <span className="settings-toggle-label">Auto-update</span>
+              <button className={`toggle-btn ${autoUpdate ? "active" : ""}`} onClick={() => onAutoUpdateChange(!autoUpdate)}>
+                <div className="toggle-knob" />
+              </button>
+            </div>
+            <p className="settings-hint">Download updates automatically without asking.</p>
+          </div>
+
+          <div className="settings-section">
+            <div className="settings-label">Daily Notes</div>
+            <p className="settings-hint">Template used when creating a daily note. Use {"{{date}}"} for the current date.</p>
+            <textarea
+              value={dailyNoteTemplate}
+              onChange={(e) => onDailyNoteTemplateChange(e.target.value)}
+              rows={3}
+              style={{
+                width: "100%",
+                padding: "var(--space-sm) var(--space-md)",
+                background: "var(--bg-secondary)",
+                color: "var(--text-primary)",
+                border: "1px solid var(--border)",
+                borderRadius: "var(--radius-sm)",
+                fontSize: "var(--font-size-sm)",
+                fontFamily: "var(--font-mono)",
+                resize: "vertical",
+                outline: "none",
+              }}
+            />
+            <p className="settings-hint" style={{ marginTop: 4, opacity: 0.7 }}>
+              Preview: {dailyNoteTemplate.replace(/\{\{date\}\}/g, new Date().toISOString().split("T")[0]).split("\n")[0]}
+            </p>
+          </div>
+
+          <div className="settings-section">
+            <div className="settings-label">Export</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-sm)" }}>
+              <button className="btn-secondary" onClick={onExportNote} disabled={!activeNote}>
+                Export Current Note as Markdown
+              </button>
+              <button className="btn-secondary" onClick={onExportNoteHtml} disabled={!activeNote}>
+                Export Current Note as HTML
+              </button>
+              <button className="btn-secondary" onClick={onExportVaultZip}>
+                Export Vault as ZIP
+              </button>
+            </div>
           </div>
 
           <div className="settings-section">
@@ -135,6 +206,12 @@ export default function Settings({
             {vaultPath && <p className="vault-path">{vaultPath}</p>}
             <p className="settings-hint">Change the folder where your notes are stored.</p>
             <button className="btn-secondary" onClick={onSwitchVault}>Switch Vault Folder</button>
+          </div>
+
+          <div className="settings-section">
+            <div className="settings-label">Vault Statistics</div>
+            <p className="settings-hint">View note count, tags, links, size, and more.</p>
+            <button className="btn-secondary" onClick={onOpenVaultStats}>Open Vault Statistics</button>
           </div>
 
           <div className="settings-section">
@@ -146,7 +223,7 @@ export default function Settings({
               <div className="shortcut-row"><span>Search / Commands</span><kbd>Ctrl+P</kbd></div>
               <div className="shortcut-row"><span>Global Search</span><kbd>Ctrl+Shift+F</kbd></div>
               <div className="shortcut-row"><span>New Note</span><kbd>Ctrl+N</kbd></div>
-              <div className="shortcut-row"><span>Daily Note</span><kbd>Ctrl+Shift+N</kbd></div>
+              <div className="shortcut-row"><span>Daily Note</span><kbd>Ctrl+D</kbd></div>
               <div className="shortcut-row"><span>Settings</span><kbd>Ctrl+,</kbd></div>
               <div className="shortcut-row"><span>Help</span><kbd>F1</kbd></div>
               <div className="shortcut-row"><span>Focus Mode</span><kbd>F9</kbd></div>
@@ -161,6 +238,7 @@ export default function Settings({
               Built with Electron + React + CodeMirror 6.
             </p>
           </div>
+
         </div>
       </div>
     </div>

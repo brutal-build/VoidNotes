@@ -1,6 +1,7 @@
 import { BrowserWindow, app } from "electron";
 import * as path from "path";
 import * as fs from "fs";
+import log from "electron-log";
 
 let mainWindow: BrowserWindow | null = null;
 let closeApproved = false;
@@ -10,6 +11,10 @@ export function getMainWindow(): BrowserWindow | null {
 }
 
 export function createWindow(): BrowserWindow {
+  const iconPath = app.isPackaged
+    ? path.join(process.resourcesPath, "icon.ico")
+    : path.join(__dirname, "..", "..", "build", "icon.ico");
+
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -17,12 +22,27 @@ export function createWindow(): BrowserWindow {
     frame: false,
     titleBarStyle: "hidden",
     title: "Void Notes",
+    icon: iconPath,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      sandbox: false,
       preload: path.join(__dirname, "preload.js"),
     },
   });
+
+  if (!process.env.VITE_DEV_SERVER_URL) {
+    mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+      callback({
+        responseHeaders: {
+          ...details.responseHeaders,
+          "Content-Security-Policy": [
+            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: file:; font-src 'self' data:;"
+          ]
+        }
+      });
+    });
+  }
 
   if (process.env.VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
@@ -63,7 +83,7 @@ export function createWelcomeFile(dir: string): void {
       '',
       '# Void Notes Feature Showcase',
       '',
-      'Welcome to **Void Notes** — your minimalist second-brain notepad. This note demonstrates every formatting feature available.',
+      'Welcome to **Void Notes** ??" your minimalist second-brain notepad. This note demonstrates every formatting feature available.',
       '',
       '---',
       '',
@@ -117,7 +137,7 @@ export function createWelcomeFile(dir: string): void {
       '## Blockquotes',
       '',
       '> "The best way to predict the future is to create it."',
-      '> — Peter Drucker',
+      '> ??" Peter Drucker',
       '',
       '> Multi-line blockquote with **bold** and *italic* inside.',
       '> Second line continues here.',
@@ -179,15 +199,15 @@ export function createWelcomeFile(dir: string): void {
       '> Use `Ctrl+Shift+E` to toggle split view for side-by-side editing.',
       '',
       '> [!ERROR] Danger Zone',
-      '> Deleting a note is permanent. There is no trash bin.',
+      '> Deleted notes go to Trash. You can restore or permanently delete them from there.',
       '',
       '---',
       '',
       '## Wiki Links',
       '',
       'Link to other notes using double brackets:',
-      '- [[Untitled]] — a basic note',
-      '- [[non-existent]] — a missing link (dashed style)',
+      '- [[Untitled]] ??" a basic note',
+      '- [[non-existent]] ??" a missing link (dashed style)',
       '',
       '---',
       '',
@@ -262,11 +282,11 @@ export function createWelcomeFile(dir: string): void {
       '',
       '---',
       '',
-      '*Welcome to Void Notes — your second brain starts here.*',
+      '*Welcome to Void Notes ??" your second brain starts here.*',
       '',
     ].join('\n');
     fs.writeFileSync(path.join(dir, "Welcome to Void Notes.md"), content, "utf-8");
   } catch (error) {
-    console.error("Failed to create welcome file:", error);
+    log.error("[window] Failed to create welcome file:", error);
   }
 }

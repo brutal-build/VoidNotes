@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { VaultIndex } from "../services/vault-index";
+import EmptyState from "./EmptyState";
 
 export function buildSearchIndex(notes: string[], contents: Map<string, string>, modifiedAt = new Map<string, number>()): VaultIndex {
   return new VaultIndex(notes.map((path) => ({ path, content: contents.get(path) ?? "", modifiedAt: modifiedAt.get(path) ?? 0 })));
@@ -75,7 +76,18 @@ export default function GlobalSearch({ notes, contents, vaultIndex, onSelect, on
       <div className="global-search" onClick={(e) => e.stopPropagation()}>
         <input ref={inputRef} className="global-search-input" placeholder="Search in all notes... (Ctrl+Shift+F)" value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={handleKeyDown} />
         <div className="global-search-results">
-          {query && results.length === 0 && <div className="global-search-empty">No results found</div>}
+          {query && results.length === 0 && (
+            <EmptyState
+              icon={
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" opacity="0.4">
+                  <circle cx="11" cy="11" r="8"/>
+                  <path d="m21 21-4.3-4.3"/>
+                </svg>
+              }
+              title={`No results for '${query}'`}
+              description="Try different keywords."
+            />
+          )}
           {results.map((result, i) => (
             <button key={`${result.note}-${result.line}`} className={`global-search-item ${i === selected ? "selected" : ""}`} onClick={() => onSelect(result.note)} onMouseEnter={() => setSelected(i)}>
               <div className="search-item-header">

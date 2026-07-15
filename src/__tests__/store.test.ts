@@ -67,8 +67,8 @@ describe("useAppStore", () => {
   });
 
   it("persists theme to localStorage", () => {
-    useAppStore.getState().setTheme("dracula");
-    expect(useAppStore.getState().theme).toBe("dracula");
-    expect(localStorage.getItem("void-notes-theme")).toBe("dracula");
+    useAppStore.getState().setTheme("macos");
+    expect(useAppStore.getState().theme).toBe("macos");
+    expect(localStorage.getItem("void-notes-theme")).toBe("macos");
   });
 });

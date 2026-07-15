@@ -52,18 +52,11 @@ describe("structured IPC consumers", () => {
     expect(view.textContent).toContain("Folder unavailable");
   });
 
-  it("unwraps note content for the graph loader", async () => {
-    vi.stubGlobal("electronAPI", { loadNote: vi.fn().mockResolvedValue({ ok: true, value: "[[Second]]" }) });
-    const view = render(<GraphView notes={["First", "Second"]} backlinks={new Map()} activeNote={null} onNodeClick={vi.fn()} onClose={vi.fn()} />);
-    await flush();
-    expect(view.textContent).not.toContain("Unable to load graph");
+  it("renders graph with allContents prop", async () => {
+    const allContents = new Map<string, string>([["First", "[[Second]]"], ["Second", ""]]);
+    const view = render(<GraphView notes={["First", "Second"]} allContents={allContents} backlinks={new Map()} activeNote={null} onNodeClick={vi.fn()} onClose={vi.fn()} />);
+    // Graph builds asynchronously via setTimeout(0) to avoid blocking UI
+    await new Promise((r) => setTimeout(r, 10));
     expect(view.textContent).toContain("2 notes");
-  });
-
-  it("shows a graph load error instead of substituting empty note content", async () => {
-    vi.stubGlobal("electronAPI", { loadNote: vi.fn().mockResolvedValue({ ok: false, error: { code: "IO_ERROR", message: "Cannot read First", retryable: true } }) });
-    const view = render(<GraphView notes={["First"]} backlinks={new Map()} activeNote={null} onNodeClick={vi.fn()} onClose={vi.fn()} />);
-    await flush();
-    expect(view.textContent).toContain("Cannot read First");
   });
 });

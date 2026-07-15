@@ -5,8 +5,9 @@
  * Uses d3-force for physics simulation.
  */
 
-import { forceSimulation, forceLink, forceManyBody, forceCenter, forceCollide, SimulationNodeDatum } from 'd3-force';
+import { forceSimulation, forceLink, forceManyBody, forceCenter, forceCollide, SimulationNodeDatum, Simulation } from 'd3-force';
 import { extractWikiLinks } from '../plugins/wiki-links-utils';
+import { extractTags } from '../plugins/tag-utils';
 import type { GraphNode, GraphEdge, GraphData, GraphFilter, GraphLayoutOptions, ColorMode, SizeMode } from '../types';
 
 // Re-export for backward compatibility
@@ -20,6 +21,9 @@ export const DEFAULT_FILTER: GraphFilter = {
   showTags: [],
   colorMode: 'default',
   sizeMode: 'degree',
+  nodeScale: 1,
+  linkThickness: 1,
+  showArrows: false,
 };
 
 export const DEFAULT_LAYOUT_OPTIONS: GraphLayoutOptions = {
@@ -27,6 +31,8 @@ export const DEFAULT_LAYOUT_OPTIONS: GraphLayoutOptions = {
   height: 600,
   chargeStrength: -500,
   linkDistance: 120,
+  linkStrength: 0.3,
+  centerStrength: 0.15,
   collideRadius: 15,
 };
 
@@ -49,14 +55,6 @@ const FOLDER_COLORS = [
 const DEGREE_COLORS = ['#61afef', '#abb2bf'];
 
 // ─── Build graph ────────────────────────────────────────
-
-async function loadContents(notes: string[], contentLoader: (path: string) => Promise<string>): Promise<Map<string, string>> {
-  const sortedNotes = [...new Set(notes)].sort((a, b) => a.localeCompare(b));
-  const contents = await Promise.all(sortedNotes.map(note => contentLoader(note).catch(() => '')));
-  const map = new Map<string, string>();
-  sortedNotes.forEach((note, i) => map.set(note, contents[i]));
-  return map;
-}
 
 function buildLinkMap(noteMap: Map<string, string>): Map<string, Set<string>> {
   const linkMap = new Map<string, Set<string>>();
@@ -82,11 +80,15 @@ function computeDegrees(noteMap: Map<string, string>, linkMap: Map<string, Set<s
   return degree;
 }
 
-export async function buildGraph(
+export function buildGraph(
   notes: string[],
-  contentLoader: (path: string) => Promise<string>
-): Promise<GraphData> {
-  const noteMap = await loadContents(notes, contentLoader);
+  allContents: Map<string, string>
+): GraphData {
+  const sortedNotes = [...new Set(notes)].sort((a, b) => a.localeCompare(b));
+  const noteMap = new Map<string, string>();
+  for (const note of sortedNotes) {
+    noteMap.set(note, allContents.get(note) ?? "");
+  }
   const linkMap = buildLinkMap(noteMap);
   const degrees = computeDegrees(noteMap, linkMap);
 
@@ -98,7 +100,7 @@ export async function buildGraph(
     const deg = degrees.get(note) || 0;
     const folder = note.includes('/') ? note.split('/').slice(0, -1).join('/') : '';
     const content = noteMap.get(note) || '';
-    const tags = extractTags(content);
+    const tags = Array.from(new Set(extractTags(content).map(t => t.toLowerCase())));
     const colorIndex = Math.abs(hashString(note)) % COLORS_DEFAULT.length;
 
     nodes.push({
@@ -169,11 +171,17 @@ function assignClusters(nodes: GraphNode[], edges: GraphEdge[]): void {
 
 // ─── Simulation ─────────────────────────────────────────
 
+export interface LayoutResult {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  simulation: Simulation<SimulationNodeDatum, any>;
+}
+
 export function computeLayout(
   graphData: GraphData,
   options: Partial<GraphLayoutOptions> = {},
   simulationFactory: typeof forceSimulation = forceSimulation
-): { nodes: GraphNode[]; edges: GraphEdge[] } {
+): LayoutResult {
   const opts = { ...DEFAULT_LAYOUT_OPTIONS, ...options };
   const nodes = graphData.nodes.map(n => ({ ...n }));
   const edges = graphData.edges.map(e => ({ ...e }));
@@ -182,10 +190,10 @@ export function computeLayout(
     .force('link', forceLink<any, any>(edges)
       .id((d: any) => d.id)
       .distance(opts.linkDistance!)
-      .strength(0.3)
+      .strength(opts.linkStrength!)
     )
     .force('charge', forceManyBody().strength(opts.chargeStrength!))
-    .force('center', forceCenter(opts.width / 2, opts.height / 2))
+    .force('center', forceCenter(opts.width / 2, opts.height / 2).strength(opts.centerStrength!))
     .force('collide', forceCollide(opts.collideRadius!))
     .stop();
 
@@ -197,7 +205,7 @@ export function computeLayout(
   }
 
   simulation.stop();
-  return { nodes, edges };
+  return { nodes, edges, simulation };
 }
 
 export function limitGraph(graphData: GraphData, maxNodes = 2000): GraphData {
@@ -246,11 +254,12 @@ export function applyColorMode(
 
 export function applySizeMode(
   nodes: GraphNode[],
-  mode: SizeMode
+  mode: SizeMode,
+  scale = 1
 ): GraphNode[] {
   return nodes.map(n => ({
     ...n,
-    size: mode === 'degree' ? Math.max(4, Math.min(18, n.degree * 1.5 + 4)) : 6,
+    size: (mode === 'degree' ? Math.max(4, Math.min(18, n.degree * 1.5 + 4)) : 6) * scale,
   }));
 }
 
@@ -290,7 +299,7 @@ export function applyFilter(
 
   // Apply color and size modes
   nodes = applyColorMode(nodes, filter.colorMode, allFolders);
-  nodes = applySizeMode(nodes, filter.sizeMode);
+  nodes = applySizeMode(nodes, filter.sizeMode, filter.nodeScale);
 
   const visibleIds = new Set(nodes.map(n => n.id));
   edges = edges.filter(e => {
@@ -313,16 +322,6 @@ export function getNeighbors(nodeId: string, edges: GraphEdge[]): Set<string> {
     if (targetId === nodeId) neighbors.add(sourceId);
   }
   return neighbors;
-}
-
-function extractTags(content: string): string[] {
-  const regex = /(?<=^|\s)#([a-zA-Z0-9_\-ćłóżźąęśń]+)/g;
-  const tags: string[] = [];
-  let match;
-  while ((match = regex.exec(content)) !== null) {
-    tags.push(match[1].toLowerCase());
-  }
-  return Array.from(new Set(tags));
 }
 
 function hashString(str: string): number {

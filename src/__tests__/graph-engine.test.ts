@@ -2,10 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 import { buildGraph, computeLayout, limitGraph } from '../graph/graph-engine';
 
 describe('graph reliability', () => {
-  it('builds deterministic positions independent of input order', async () => {
-    const content: Record<string, string> = { 'a.md': '[[b.md]]', 'b.md': '' };
-    const first = await buildGraph(['b.md', 'a.md'], async path => content[path]);
-    const second = await buildGraph(['a.md', 'b.md'], async path => content[path]);
+  it('builds deterministic positions independent of input order', () => {
+    const allContents = new Map<string, string>([['a.md', '[[b.md]]'], ['b.md', '']]);
+    const first = buildGraph(['b.md', 'a.md'], allContents);
+    const second = buildGraph(['a.md', 'b.md'], allContents);
     const positions = (nodes: typeof first.nodes) => nodes.map(({ id, x, y }) => ({ id, x, y }));
     expect(positions(first.nodes)).toEqual(positions(second.nodes));
     expect(first.nodes.map(node => node.id)).toEqual(['a.md', 'b.md']);

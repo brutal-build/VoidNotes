@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import type { BrowserWindow } from "electron";
+import log from "electron-log";
 
 let watcher: fs.FSWatcher | null = null;
 
@@ -42,8 +43,9 @@ export function startWatcher(vaultPath: string, mainWindow: BrowserWindow): void
         path: normalizePath(filename),
       });
     });
+    log.info("[watcher] Started watching:", vaultPath);
   } catch (error) {
-    console.error("Failed to start file watcher:", error);
+    log.error("[watcher] Failed to start file watcher:", error);
   }
 }
 
@@ -51,8 +53,9 @@ export function stopWatcher(): void {
   if (watcher) {
     try {
       watcher.close();
+      log.info("[watcher] Stopped watching");
     } catch (error) {
-      console.error("Failed to stop file watcher:", error);
+      log.error("[watcher] Failed to stop file watcher:", error);
     }
     watcher = null;
   }

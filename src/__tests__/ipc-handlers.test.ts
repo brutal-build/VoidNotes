@@ -19,7 +19,15 @@ beforeEach(() => {
 
 describe("typed IPC handlers", () => {
   it("registers every contract request channel", () => {
-    const eventChannels = new Set<string>([IPC_CHANNELS.appCloseRequested, IPC_CHANNELS.noteExternalChange]);
+    const eventChannels = new Set<string>([
+      IPC_CHANNELS.appCloseRequested,
+      IPC_CHANNELS.noteExternalChange,
+      IPC_CHANNELS.updateAvailable,
+      IPC_CHANNELS.updateProgress,
+      IPC_CHANNELS.updateDownloaded,
+      IPC_CHANNELS.updateError,
+      IPC_CHANNELS.updateNotAvailable,
+    ]);
     for (const channel of Object.values(IPC_CHANNELS)) {
       if (!eventChannels.has(channel)) expect(handlers.has(channel)).toBe(true);
     }
@@ -34,6 +42,9 @@ describe("typed IPC handlers", () => {
       [IPC_CHANNELS.trashRestore, ["id"]], [IPC_CHANNELS.trashDelete, ["id"]],
       [IPC_CHANNELS.folderCreate, ["folder"]], [IPC_CHANNELS.folderRename, ["folder", "new"]],
       [IPC_CHANNELS.folderDelete, ["folder"]],
+      [IPC_CHANNELS.dailyNotePath, []], [IPC_CHANNELS.exportNote, ["a.md"]],
+      [IPC_CHANNELS.exportVaultZip, []], [IPC_CHANNELS.exportNoteHtml, ["a.md"]],
+      [IPC_CHANNELS.vaultStats, []],
     ];
     for (const [channel, args] of calls) {
       const result = await handlers.get(channel)!({}, ...args);

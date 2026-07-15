@@ -1,6 +1,8 @@
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import ContextMenu, { ContextMenuItem } from "./ContextMenu";
+import EmptyState from "./EmptyState";
+import { useContextMenu } from "../hooks/useContextMenu";
 
 interface SidebarProps {
   notes: string[];
@@ -11,6 +13,7 @@ interface SidebarProps {
   tags: string[];
   selectedTags: string[];
   bookmarks: string[];
+  pinnedNotes: string[];
   onToggleTag: (tag: string) => void;
   onToggleFocusMode: () => void;
   onSelect: (fileName: string) => void;
@@ -18,8 +21,9 @@ interface SidebarProps {
   onDelete: (fileName: string) => void;
   onRename: (oldName: string) => void;
   onToggleBookmark: (note: string) => void;
+  onTogglePin: (note: string) => void;
+  onDailyNote: () => void;
   onOpenSearch: () => void;
-  onOpenSettings: () => void;
   onOpenHelp: () => void;
 }
 
@@ -62,17 +66,24 @@ function flattenTree(
   openFolders: Set<string>,
   depth: number,
   parentPath: string,
+  pinnedNotes: string[],
 ): TreeItem[] {
   const items: TreeItem[] = [];
   const folderPath = parentPath ? `${parentPath}/${node.name}` : node.name;
   const sortedFolders = Array.from(node.subfolders.entries()).sort(([a], [b]) => a.localeCompare(b));
-  const sortedFiles = [...node.files].sort();
+  const sortedFiles = [...node.files].sort((a, b) => {
+    const aPinned = pinnedNotes.includes(a);
+    const bPinned = pinnedNotes.includes(b);
+    if (aPinned && !bPinned) return -1;
+    if (!aPinned && bPinned) return 1;
+    return a.localeCompare(b);
+  });
 
   for (const [name, folder] of sortedFolders) {
     const childPath = parentPath ? `${parentPath}/${name}` : name;
     items.push({ id: `folder:${childPath}`, type: "folder", label: name, depth });
     if (openFolders.has(childPath)) {
-      items.push(...flattenTree(folder, openFolders, depth + 1, childPath));
+      items.push(...flattenTree(folder, openFolders, depth + 1, childPath, pinnedNotes));
     }
   }
 
@@ -84,15 +95,31 @@ function flattenTree(
   return items;
 }
 
-export default function Sidebar({ notes, allNotes, activeNote, focusMode, vaultPath, tags, selectedTags, bookmarks, onToggleTag, onToggleFocusMode, onSelect, onNew, onDelete, onRename, onToggleBookmark, onOpenSearch, onOpenSettings, onOpenHelp }: SidebarProps) {
-  const tree = useMemo(() => buildTree(notes), [notes]);
+export default function Sidebar({ notes, allNotes, activeNote, focusMode, vaultPath, tags, selectedTags, bookmarks, pinnedNotes, onToggleTag, onToggleFocusMode, onSelect, onNew, onDelete, onRename, onToggleBookmark, onTogglePin, onDailyNote, onOpenSearch, onOpenHelp }: SidebarProps) {
+  const sortedNotes = useMemo(() => {
+    const pinned = notes.filter((n) => pinnedNotes.includes(n));
+    const unpinned = notes.filter((n) => !pinnedNotes.includes(n));
+    return [...pinned, ...unpinned];
+  }, [notes, pinnedNotes]);
+
+  const tree = useMemo(() => buildTree(sortedNotes), [sortedNotes]);
   const [openFolders, setOpenFolders] = useState<Set<string>>(new Set());
   const [focusedId, setFocusedId] = useState<string | null>(null);
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; file: string } | null>(null);
+  const { isOpen: contextMenuOpen, x: contextMenuX, y: contextMenuY, items: contextMenuItems, showContextMenu, closeContextMenu } = useContextMenu();
+
+  const itemRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const treeRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (focusedId) {
+      const el = itemRefs.current.get(focusedId);
+      el?.focus();
+    }
+  }, [focusedId]);
 
   const flatItems = useMemo(
-    () => flattenTree(tree, openFolders, 0, ""),
-    [tree, openFolders],
+    () => flattenTree(tree, openFolders, 0, "", pinnedNotes),
+    [tree, openFolders, pinnedNotes],
   );
 
   const focusedIndex = useMemo(
@@ -109,11 +136,6 @@ export default function Sidebar({ notes, allNotes, activeNote, focusMode, vaultP
     });
   }, []);
 
-  const handleContextMenu = useCallback((e: React.MouseEvent, file: string) => {
-    e.preventDefault();
-    setContextMenu({ x: e.clientX, y: e.clientY, file });
-  }, []);
-
   const handleRename = useCallback((file: string) => {
     onRename(file);
   }, [onRename]);
@@ -123,13 +145,18 @@ export default function Sidebar({ notes, allNotes, activeNote, focusMode, vaultP
     navigator.clipboard.writeText(fullPath);
   }, [vaultPath]);
 
-  const contextMenuItems: ContextMenuItem[] = contextMenu ? [
-    { label: "Open", icon: "open", action: () => onSelect(contextMenu.file) },
-    { label: bookmarks.includes(contextMenu.file) ? "Remove bookmark" : "Bookmark", icon: bookmarks.includes(contextMenu.file) ? "star-filled" : "star", action: () => onToggleBookmark(contextMenu.file) },
-    { label: "Rename", icon: "rename", action: () => handleRename(contextMenu.file) },
-    { label: "Copy path", icon: "copy", action: () => handleCopyPath(contextMenu.file) },
-    { label: "Delete", icon: "delete", action: () => onDelete(contextMenu.file), danger: true },
-  ] : [];
+  const handleContextMenu = useCallback((e: React.MouseEvent, file: string) => {
+    e.preventDefault();
+    const items: ContextMenuItem[] = [
+      { label: "Open", icon: "open", action: () => onSelect(file) },
+      { label: pinnedNotes.includes(file) ? "Unpin" : "Pin", icon: pinnedNotes.includes(file) ? "pin-filled" : "pin", action: () => onTogglePin(file) },
+      { label: bookmarks.includes(file) ? "Remove bookmark" : "Bookmark", icon: bookmarks.includes(file) ? "star-filled" : "star", action: () => onToggleBookmark(file) },
+      { label: "Rename", icon: "rename", action: () => handleRename(file) },
+      { label: "Copy path", icon: "copy", action: () => handleCopyPath(file) },
+      { label: "Delete", icon: "delete", action: () => onDelete(file), danger: true },
+    ];
+    showContextMenu(e.clientX, e.clientY, items);
+  }, [onSelect, onTogglePin, onToggleBookmark, handleRename, handleCopyPath, onDelete, pinnedNotes, bookmarks, showContextMenu]);
 
   const handleTreeKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (flatItems.length === 0) return;
@@ -219,15 +246,45 @@ export default function Sidebar({ notes, allNotes, activeNote, focusMode, vaultP
           <button className="btn-icon" onClick={onNew} title="New note (Ctrl+N)">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
           </button>
+          <button className="btn-icon" onClick={onDailyNote} title="Daily note (Ctrl+D)">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          </button>
           <button className={`btn-icon focus-toggle${focusMode ? " active" : ""}`} onClick={onToggleFocusMode} title="Toggle focus mode (F9)">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
           </button>
         </div>
       </div>
+      {allNotes.length === 0 ? (
+        <EmptyState
+          icon={
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" opacity="0.4">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="12" y1="18" x2="12" y2="12"/>
+              <line x1="9" y1="15" x2="15" y2="15"/>
+            </svg>
+          }
+          title="No notes yet"
+          description="Press Ctrl+N to create your first note."
+          action={{ label: "Create Note", onClick: onNew }}
+        />
+      ) : (
       <div
         className="file-tree"
         role="tree"
+        ref={treeRef}
+        tabIndex={0}
         onKeyDown={handleTreeKeyDown}
+        onFocus={() => {
+          if (!focusedId && flatItems.length > 0) {
+            setFocusedId(flatItems[0].id);
+          }
+        }}
+        onBlur={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+            setFocusedId(null);
+          }
+        }}
       >
         {flatItems.map((item) => {
           const isFocused = item.id === focusedId;
@@ -243,6 +300,7 @@ export default function Sidebar({ notes, allNotes, activeNote, focusMode, vaultP
                 tabIndex={isFocused ? 0 : -1}
                 className="tree-folder-header"
                 style={{ paddingLeft: `${12 + item.depth * 12}px` }}
+                ref={(el) => { if (el) itemRefs.current.set(item.id, el); else itemRefs.current.delete(item.id); }}
                 onClick={() => toggleFolder(folderPath)}
                 onFocus={() => handleItemFocus(item.id)}
               >
@@ -263,6 +321,7 @@ export default function Sidebar({ notes, allNotes, activeNote, focusMode, vaultP
               tabIndex={isFocused ? 0 : -1}
               className={`tree-file ${item.file === activeNote ? "active" : ""}`}
               style={{ paddingLeft: `${12 + item.depth * 12 + 16}px` }}
+              ref={(el) => { if (el) itemRefs.current.set(item.id, el); else itemRefs.current.delete(item.id); }}
               onClick={() => item.file && onSelect(item.file)}
               onContextMenu={(e) => item.file && handleContextMenu(e, item.file)}
               onFocus={() => handleItemFocus(item.id)}
@@ -271,6 +330,11 @@ export default function Sidebar({ notes, allNotes, activeNote, focusMode, vaultP
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
               </span>
               <span className="tree-file-name">{item.label}</span>
+              {item.file && pinnedNotes.includes(item.file) && (
+                <span className="tree-pin-indicator" title="Pinned">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="var(--accent)" stroke="var(--accent)" strokeWidth="2"><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/></svg>
+                </span>
+              )}
               {item.file && bookmarks.includes(item.file) && (
                 <span className="tree-bookmark-star" title="Bookmarked">
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="var(--accent)" stroke="var(--accent)" strokeWidth="1"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
@@ -289,13 +353,14 @@ export default function Sidebar({ notes, allNotes, activeNote, focusMode, vaultP
           );
         })}
       </div>
+      )}
 
-      {contextMenu && createPortal(
+      {contextMenuOpen && createPortal(
         <ContextMenu
-          x={contextMenu.x}
-          y={contextMenu.y}
+          x={contextMenuX}
+          y={contextMenuY}
           items={contextMenuItems}
-          onClose={() => setContextMenu(null)}
+          onClose={closeContextMenu}
         />,
         document.body
       )}

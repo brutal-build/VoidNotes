@@ -12,8 +12,12 @@ interface GraphCanvasProps {
   nodes: GraphNode[];
   edges: GraphEdge[];
   onNodeClick: (noteId: string) => void;
+  onNodeDrag?: (noteId: string, x: number, y: number) => void;
+  onNodeDragEnd?: (noteId: string) => void;
   width: number;
   height: number;
+  linkThickness: number;
+  showArrows: boolean;
 }
 
 interface ViewTransform {
@@ -22,18 +26,25 @@ interface ViewTransform {
   scale: number;
 }
 
-export default function GraphCanvas({ nodes, edges, onNodeClick, width, height }: GraphCanvasProps) {
+export default function GraphCanvas({ nodes, edges, onNodeClick, onNodeDrag, onNodeDragEnd, width, height, linkThickness, showArrows }: GraphCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [transform, setTransform] = useState<ViewTransform>({ x: 0, y: 0, scale: 1 });
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
   const draggedNode = useRef<string | null>(null);
+  const draggedFrom = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const isPanning = useRef(false);
   const panStart = useRef({ x: 0, y: 0 });
   const transformRef = useRef(transform);
   const animFrameRef = useRef<number>(0);
+  const needsRedrawRef = useRef(true);
 
   // Keep ref in sync with state
   useEffect(() => { transformRef.current = transform; }, [transform]);
+
+  // Mark canvas dirty when visual state changes
+  useEffect(() => {
+    needsRedrawRef.current = true;
+  }, [nodes, edges, hoveredNode, transform, linkThickness, showArrows, width, height]);
 
   // ─── Rendering ──────────────────────────────────────────
 
@@ -56,8 +67,8 @@ export default function GraphCanvas({ nodes, edges, onNodeClick, width, height }
       ? new Set([hoveredNode!, ...neighbors])
       : null;
 
-    ctx.strokeStyle = 'rgba(148, 148, 168, 0.22)';
-    ctx.lineWidth = 1;
+    const lw = linkThickness * (s > 0.5 ? 1 : 1.5);
+
     for (const edge of edges) {
       const source = typeof edge.source === 'object' ? (edge.source as any) : null;
       const target = typeof edge.target === 'object' ? (edge.target as any) : null;
@@ -70,8 +81,32 @@ export default function GraphCanvas({ nodes, edges, onNodeClick, width, height }
       ctx.beginPath();
       ctx.moveTo(source.x, source.y);
       ctx.lineTo(target.x, target.y);
+      ctx.lineWidth = lw;
       ctx.strokeStyle = isHighlighted ? `rgba(148, 148, 168, ${hoveredNode ? 0.5 : 0.22})` : 'rgba(148, 148, 168, 0.05)';
       ctx.stroke();
+
+      // Arrows
+      if (showArrows && isHighlighted) {
+        const dx = target.x - source.x;
+        const dy = target.y - source.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist < 1) continue;
+        const ux = dx / dist;
+        const uy = dy / dist;
+        const nodeR = (target.size || 6) + 4;
+        const tipX = target.x - ux * nodeR;
+        const tipY = target.y - uy * nodeR;
+        const arrowLen = 6 * lw;
+        const arrowW = 3 * lw;
+
+        ctx.beginPath();
+        ctx.moveTo(tipX, tipY);
+        ctx.lineTo(tipX - ux * arrowLen + uy * arrowW, tipY - uy * arrowLen - ux * arrowW);
+        ctx.lineTo(tipX - ux * arrowLen - uy * arrowW, tipY - uy * arrowLen + ux * arrowW);
+        ctx.closePath();
+        ctx.fillStyle = ctx.strokeStyle;
+        ctx.fill();
+      }
     }
 
   // Rysuj węzły
@@ -145,14 +180,19 @@ export default function GraphCanvas({ nodes, edges, onNodeClick, width, height }
     }
 
     ctx.restore();
-  }, [nodes, edges, hoveredNode, width, height]);
+  }, [nodes, edges, hoveredNode, width, height, linkThickness, showArrows]);
 
-  // Animation loop
+  // Animation loop with dirty flag
   useEffect(() => {
     let running = true;
     const loop = () => {
       if (!running) return;
+      if (!needsRedrawRef.current) {
+        animFrameRef.current = requestAnimationFrame(loop);
+        return;
+      }
       draw();
+      needsRedrawRef.current = false;
       animFrameRef.current = requestAnimationFrame(loop);
     };
     animFrameRef.current = requestAnimationFrame(loop);
@@ -196,6 +236,7 @@ export default function GraphCanvas({ nodes, edges, onNodeClick, width, height }
 
     if (node) {
       draggedNode.current = node.id;
+      draggedFrom.current = { x: node.x ?? 0, y: node.y ?? 0 };
     } else {
       isPanning.current = true;
       panStart.current = {
@@ -207,14 +248,24 @@ export default function GraphCanvas({ nodes, edges, onNodeClick, width, height }
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     const pos = screenToGraph(e.clientX, e.clientY);
-    const node = findNodeAt(pos);
 
-    if (node && node.id !== draggedNode.current) {
-      setHoveredNode(node.id);
-      (e.target as HTMLElement).style.cursor = 'pointer';
-    } else if (!node && !isPanning.current) {
-      setHoveredNode(null);
-      (e.target as HTMLElement).style.cursor = 'default';
+    if (draggedNode.current) {
+      const dragged = nodes.find(n => n.id === draggedNode.current);
+      if (dragged) {
+        dragged.x = pos.x;
+        dragged.y = pos.y;
+        onNodeDrag?.(draggedNode.current, pos.x, pos.y);
+      }
+      if (canvasRef.current) canvasRef.current.style.cursor = 'grabbing';
+    } else {
+      const node = findNodeAt(pos);
+      if (node) {
+        setHoveredNode(node.id);
+        if (canvasRef.current) canvasRef.current.style.cursor = 'pointer';
+      } else {
+        setHoveredNode(null);
+        if (canvasRef.current) canvasRef.current.style.cursor = 'default';
+      }
     }
 
     if (isPanning.current) {
@@ -224,16 +275,22 @@ export default function GraphCanvas({ nodes, edges, onNodeClick, width, height }
         y: e.clientY - panStart.current.y,
       });
     }
-  }, [screenToGraph, findNodeAt]);
+  }, [screenToGraph, findNodeAt, nodes, onNodeDrag]);
 
   const handleMouseUp = useCallback((e: React.MouseEvent) => {
     if (draggedNode.current) {
+      const nodeId = draggedNode.current;
       const pos = screenToGraph(e.clientX, e.clientY);
-      const node = findNodeAt(pos);
-      if (node && node.id === draggedNode.current) {
-        onNodeClick(node.id);
+      const dragDist = Math.hypot(pos.x - draggedFrom.current.x, pos.y - draggedFrom.current.y);
+      if (dragDist < 5) {
+        const node = findNodeAt(pos);
+        if (node && node.id === nodeId) {
+          onNodeClick(node.id);
+        }
       }
       draggedNode.current = null;
+      onNodeDragEnd?.(nodeId);
+      if (canvasRef.current) canvasRef.current.style.cursor = 'default';
     }
     isPanning.current = false;
   }, [screenToGraph, findNodeAt, onNodeClick]);

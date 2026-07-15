@@ -1,18 +1,20 @@
 import { ipcMain, dialog } from "electron";
 import * as fs from "fs";
 import * as path from "path";
+import { execFile } from "child_process";
+import { promisify } from "util";
+
+const execFileAsync = promisify(execFile);
+const MAX_FILE_WRITE_BYTES = 25 * 1024 * 1024;
+import log from "electron-log";
 import { getMainWindow, createWelcomeFile, approveWindowClose } from "./window";
 import { loadConfig, saveConfig } from "./config";
 import * as notes from "./note-files";
 import { resolveVaultPath, validateEntryName } from "./path-safety";
 import { startWatcher, stopWatcher } from "./watcher";
-type IpcErrorCode = "NO_VAULT" | "INVALID_ARGUMENT" | "INVALID_NAME" | "OUTSIDE_VAULT" | "SYMLINK_ESCAPE" | "NOT_FOUND" | "ALREADY_EXISTS" | "NOT_WRITABLE" | "CONFLICT" | "IO_ERROR" | "CANCELLED";
-type IpcResult<T> = { ok: true; value: T } | { ok: false; error: { code: IpcErrorCode; message: string; retryable: boolean } };
-type NoteStat = { mtime: string; birthtime: string; size: number };
-type TrashEntry = { id: string; originalPath: string; deletedAt: string };
-const IPC_CHANNELS = { vaultSelect: "vault:select", vaultSet: "vault:set", vaultGet: "vault:get", notesList: "notes:list", notesLoad: "notes:load", notesSave: "notes:save", notesCreate: "notes:create", notesDelete: "notes:delete", notesRename: "notes:rename", notesStat: "notes:stat", trashList: "trash:list", trashLoad: "trash:load", trashRestore: "trash:restore", trashDelete: "trash:delete", folderCreate: "folder:create", folderRename: "folder:rename", folderDelete: "folder:delete", appCloseReady: "app:close-ready" } as const;
-const ok = <T>(value: T): IpcResult<T> => ({ ok: true, value });
-const err = (code: IpcErrorCode, message: string, retryable = false): IpcResult<never> => ({ ok: false, error: { code, message, retryable } });
+import { handleCheckForUpdates, handleDownloadUpdate, handleInstallUpdate } from "./updater";
+import { IPC_CHANNELS, ok, err } from "../src/shared/ipc-contract";
+import type { IpcErrorCode, IpcResult, NoteStat, TrashEntry, VaultStats } from "../src/shared/ipc-contract";
 
 let vaultPath: string | null = null;
 export function getVaultPath(): string | null { return vaultPath; }
@@ -51,10 +53,14 @@ async function listTrash(vault: string): Promise<IpcResult<TrashEntry[]>> {
     const result: TrashEntry[] = [];
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
-      const metadata = JSON.parse(await fs.promises.readFile(path.join(root.value, entry.name, "metadata.json"), "utf8")) as { originalPath?: unknown };
-      if (typeof metadata.originalPath !== "string") continue;
-      const stat = await fs.promises.stat(path.join(root.value, entry.name));
-      result.push({ id: entry.name, originalPath: metadata.originalPath, deletedAt: stat.birthtime.toISOString() });
+      try {
+        const metadata = JSON.parse(await fs.promises.readFile(path.join(root.value, entry.name, "metadata.json"), "utf8")) as { originalPath?: unknown };
+        if (typeof metadata.originalPath !== "string") continue;
+        const stat = await fs.promises.stat(path.join(root.value, entry.name));
+        result.push({ id: entry.name, originalPath: metadata.originalPath, deletedAt: stat.birthtime.toISOString() });
+      } catch {
+        // Skip corrupt trash entries instead of failing the whole list.
+      }
     }
     return ok(result.sort((a, b) => b.deletedAt.localeCompare(a.deletedAt)));
   } catch (error) {
@@ -124,4 +130,238 @@ export function registerIpcHandlers(): void {
     try { await fs.promises.rmdir(target.value); return ok(undefined); } catch (e) { return err((e as NodeJS.ErrnoException).code === "ENOENT" ? "NOT_FOUND" : "IO_ERROR", (e as Error).message); }
   }));
   ipcMain.handle(IPC_CHANNELS.appCloseReady, () => { approveWindowClose(); return ok(undefined); });
+  ipcMain.handle("log:error", (_e, payload: { message: string; stack?: string; timestamp: string }) => {
+    log.error("[renderer]", payload.message, payload.stack ?? "");
+    return ok(undefined);
+  });
+  ipcMain.handle(IPC_CHANNELS.filesWrite, (_e, relativePath: string, data: number[]) => withVault(async (v) => {
+    if (typeof relativePath !== "string" || !Array.isArray(data)) {
+      return err("INVALID_ARGUMENT", "relativePath must be a string and data must be a number array.");
+    }
+    if (data.length > MAX_FILE_WRITE_BYTES) {
+      return err("INVALID_ARGUMENT", `File exceeds maximum size of ${MAX_FILE_WRITE_BYTES} bytes.`);
+    }
+    const resolved = await resolveVaultPath(v, relativePath, "file");
+    if (!resolved.ok) return err(codeMap[resolved.code] ?? "INVALID_ARGUMENT", resolved.message);
+    try {
+      const dir = path.dirname(resolved.value);
+      await fs.promises.mkdir(dir, { recursive: true });
+      await fs.promises.writeFile(resolved.value, Buffer.from(data));
+      return ok(relativePath);
+    } catch (e) {
+      return err((e as NodeJS.ErrnoException).code === "ENOENT" ? "NOT_FOUND" : "IO_ERROR", (e as Error).message);
+    }
+  }));
+  ipcMain.handle(IPC_CHANNELS.filesRead, (_e, relativePath: string) => withVault(async (v) => {
+    const resolved = await resolveVaultPath(v, relativePath, "file");
+    if (!resolved.ok) return err(codeMap[resolved.code] ?? "INVALID_ARGUMENT", resolved.message);
+    try {
+      const buffer = await fs.promises.readFile(resolved.value);
+      return ok(Array.from(buffer));
+    } catch (e) {
+      return err((e as NodeJS.ErrnoException).code === "ENOENT" ? "NOT_FOUND" : "IO_ERROR", (e as Error).message);
+    }
+  }));
+
+  // ─── Daily Notes ──────────────────────────────────────────
+  ipcMain.handle(IPC_CHANNELS.dailyNotePath, () => withVault(async (v) => {
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, "0");
+    const dd = String(now.getDate()).padStart(2, "0");
+    const fileName = `daily/${yyyy}-${mm}-${dd}.md`;
+    const resolved = await resolveVaultPath(v, fileName, "file");
+    if (!resolved.ok) return err(codeMap[resolved.code] ?? "INVALID_ARGUMENT", resolved.message);
+    try {
+      // Check if file exists; if not, create it
+      try {
+        await fs.promises.access(resolved.value);
+      } catch {
+        // File doesn't exist, create it
+        const createResult = await notes.createNote(v, fileName);
+        if (!createResult.ok) return convert(createResult);
+      }
+      return ok(fileName);
+    } catch (e) {
+      return err("IO_ERROR", (e as Error).message);
+    }
+  }));
+
+  // ─── Export ────────────────────────────────────────────────
+  ipcMain.handle(IPC_CHANNELS.exportNote, (_e, notePath: string) => withVault(async (v) => {
+    const resolved = await resolveVaultPath(v, notePath, "file");
+    if (!resolved.ok) return err(codeMap[resolved.code] ?? "INVALID_ARGUMENT", resolved.message);
+    try {
+      const defaultName = notePath.split("/").pop() ?? "note.md";
+      const result = await dialog.showSaveDialog({
+        title: "Export Note as Markdown",
+        defaultPath: defaultName,
+        filters: [{ name: "Markdown", extensions: ["md"] }],
+      });
+      if (result.canceled || !result.filePath) return err("CANCELLED", "Export was cancelled.");
+      await fs.promises.copyFile(resolved.value, result.filePath);
+      return ok(result.filePath);
+    } catch (e) {
+      return err("IO_ERROR", (e as Error).message);
+    }
+  }));
+
+  ipcMain.handle(IPC_CHANNELS.exportVaultZip, () => withVault(async (v) => {
+    try {
+      const vaultName = path.basename(v);
+      const defaultPath = path.join(path.dirname(v), `${vaultName}-backup.zip`);
+      const result = await dialog.showSaveDialog({
+        title: "Export Vault as ZIP",
+        defaultPath: defaultPath,
+        filters: [{ name: "ZIP Archive", extensions: ["zip"] }],
+      });
+      if (result.canceled || !result.filePath) return err("CANCELLED", "Export was cancelled.");
+      // Pass paths via env vars to avoid shell injection in PowerShell -Command strings.
+      await execFileAsync("powershell.exe", [
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command",
+        "Compress-Archive -LiteralPath $env:VN_ZIP_SRC -DestinationPath $env:VN_ZIP_DST -Force",
+      ], {
+        env: { ...process.env, VN_ZIP_SRC: v, VN_ZIP_DST: result.filePath },
+        windowsHide: true,
+      });
+      return ok(result.filePath);
+    } catch (e) {
+      return err("IO_ERROR", (e as Error).message);
+    }
+  }));
+
+  ipcMain.handle(IPC_CHANNELS.exportNoteHtml, (_e, notePath: string) => withVault(async (v) => {
+    const resolved = await resolveVaultPath(v, notePath, "file");
+    if (!resolved.ok) return err(codeMap[resolved.code] ?? "INVALID_ARGUMENT", resolved.message);
+    try {
+      const content = await fs.promises.readFile(resolved.value, "utf8");
+      const defaultName = (notePath.split("/").pop() ?? "note").replace(/\.md$/, ".html");
+      const result = await dialog.showSaveDialog({
+        title: "Export Note as HTML",
+        defaultPath: defaultName,
+        filters: [{ name: "HTML", extensions: ["html"] }],
+      });
+      if (result.canceled || !result.filePath) return err("CANCELLED", "Export was cancelled.");
+      // Simple HTML wrapper with the raw markdown
+      const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${notePath.split("/").pop()?.replace(/\.md$/, "") ?? "Note"}</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; line-height: 1.6; color: #333; }
+    pre { background: #f4f4f4; padding: 1rem; border-radius: 4px; overflow-x: auto; }
+    code { background: #f4f4f4; padding: 0.2em 0.4em; border-radius: 3px; }
+    h1, h2, h3 { color: #111; }
+    a { color: #7c5cbf; }
+  </style>
+</head>
+<body>
+<pre>${content.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</pre>
+</body>
+</html>`;
+      await fs.promises.writeFile(result.filePath, html, "utf8");
+      return ok(result.filePath);
+    } catch (e) {
+      return err("IO_ERROR", (e as Error).message);
+    }
+  }));
+
+  // ─── Vault Stats ──────────────────────────────────────────
+  ipcMain.handle(IPC_CHANNELS.vaultStats, () => withVault(async (v) => {
+    try {
+      const listing = await notes.listNotes(v);
+      if (!listing.ok) return convert(listing);
+      const { notes: noteList, emptyFolders } = listing.value;
+      const wikiLinkRegex = /\[\[([^\]]+)\]\]/g;
+      const tagRegex = /(?:^|\s)#([\p{L}\p{N}_\/-]+)/gu;
+      let totalSizeBytes = 0;
+      const tagSet = new Set<string>();
+      let wikiLinkCount = 0;
+      const mtimes: { path: string; mtime: string }[] = [];
+      const allLinks = new Map<string, Set<string>>();
+
+      for (const note of noteList) {
+        const resolved = await resolveVaultPath(v, note, "file");
+        if (!resolved.ok) continue;
+        const stat = await fs.promises.stat(resolved.value);
+        totalSizeBytes += stat.size;
+        mtimes.push({ path: note, mtime: stat.mtime.toISOString() });
+        const content = await fs.promises.readFile(resolved.value, "utf8");
+        for (const match of content.matchAll(tagRegex)) {
+          tagSet.add(match[1]);
+        }
+        for (const match of content.matchAll(wikiLinkRegex)) {
+          const target = match[1].includes("|") ? match[1].split("|")[0].trim() : match[1].trim();
+          const targetPath = target.endsWith(".md") ? target : `${target}.md`;
+          if (!allLinks.has(targetPath)) allLinks.set(targetPath, new Set());
+          allLinks.get(targetPath)!.add(note);
+          wikiLinkCount++;
+        }
+      }
+
+      let orphanCount = 0;
+      for (const note of noteList) {
+        const incoming = allLinks.get(note);
+        if (!incoming || incoming.size === 0) orphanCount++;
+      }
+
+      const recentlyModified = mtimes
+        .sort((a, b) => b.mtime.localeCompare(a.mtime))
+        .slice(0, 5);
+
+      const folderNames = new Set<string>();
+      for (const n of noteList) {
+        const parts = n.split("/");
+        if (parts.length > 1) {
+          for (let i = 0; i < parts.length - 1; i++) {
+            folderNames.add(parts.slice(0, i + 1).join("/"));
+          }
+        }
+      }
+      const folderCount = folderNames.size + emptyFolders.filter((f) => !f.startsWith(".void")).length;
+
+      const stats: VaultStats = {
+        noteCount: noteList.length,
+        folderCount,
+        totalSizeBytes,
+        tagCount: tagSet.size,
+        wikiLinkCount,
+        orphanCount,
+        recentlyModified,
+        averageNoteSize: noteList.length > 0 ? Math.round(totalSizeBytes / noteList.length) : 0,
+      };
+      return ok(stats);
+    } catch (e) {
+      return err("IO_ERROR", (e as Error).message);
+    }
+  }));
+
+  ipcMain.handle("update:check", async () => {
+    try {
+      const result = await handleCheckForUpdates();
+      return ok(result);
+    } catch (e) {
+      return err("IO_ERROR", (e as Error).message);
+    }
+  });
+  ipcMain.handle("update:download", async () => {
+    try {
+      handleDownloadUpdate();
+      return ok(undefined);
+    } catch (e) {
+      return err("IO_ERROR", (e as Error).message);
+    }
+  });
+  ipcMain.handle("update:install", async () => {
+    try {
+      handleInstallUpdate();
+      return ok(undefined);
+    } catch (e) {
+      return err("IO_ERROR", (e as Error).message);
+    }
+  });
 }

@@ -45,6 +45,23 @@ export interface ExternalNoteChange {
   path: string;
 }
 
+export interface UpdateInfo {
+  version: string;
+  releaseDate: string;
+  releaseNotes: string;
+}
+
+export interface VaultStats {
+  noteCount: number;
+  folderCount: number;
+  totalSizeBytes: number;
+  tagCount: number;
+  wikiLinkCount: number;
+  orphanCount: number;
+  recentlyModified: { path: string; mtime: string }[];
+  averageNoteSize: number;
+}
+
 export const IPC_CHANNELS = {
   vaultSelect: "vault:select",
   vaultSet: "vault:set",
@@ -57,6 +74,7 @@ export const IPC_CHANNELS = {
   notesRename: "notes:rename",
   notesStat: "notes:stat",
   trashList: "trash:list",
+  trashLoad: "trash:load",
   trashRestore: "trash:restore",
   trashDelete: "trash:delete",
   folderCreate: "folder:create",
@@ -65,6 +83,22 @@ export const IPC_CHANNELS = {
   appCloseReady: "app:close-ready",
   appCloseRequested: "app:close-requested",
   noteExternalChange: "notes:external-change",
+  updateCheck: "update:check",
+  updateDownload: "update:download",
+  updateInstall: "update:install",
+  updateAvailable: "update:available",
+  updateProgress: "update:progress",
+  updateDownloaded: "update:downloaded",
+  updateError: "update:error",
+  updateNotAvailable: "update:not-available",
+  filesWrite: "files:write",
+  filesRead: "files:read",
+  logError: "log:error",
+  dailyNotePath: "daily:note-path",
+  exportNote: "export:note",
+  exportVaultZip: "export:vault-zip",
+  exportNoteHtml: "export:note-html",
+  vaultStats: "vault:stats",
 } as const;
 
 export function ok<T>(value: T): IpcResult<T> {

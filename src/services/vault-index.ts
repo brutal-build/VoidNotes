@@ -1,3 +1,5 @@
+import { extractTags } from "../plugins/tag-utils";
+
 export interface VaultIndexEntryInput {
   path: string;
   content: string;
@@ -54,7 +56,7 @@ function parseDocument(content: string): Omit<VaultIndexEntry, keyof Required<Va
   }
   const headings = [...body.matchAll(/^#{1,6}\s+(.+?)\s*#*$/gm)].map((item) => item[1].trim());
   const wikiLinks = [...body.matchAll(/\[\[([^\]|#]+)(?:#[^\]|]+)?(?:\|[^\]]+)?\]\]/g)].map((item) => item[1].trim());
-  const inlineTags = [...body.matchAll(/(?:^|\s)#([\p{L}\p{N}_/-]+)/gu)].map((item) => item[1]);
+  const inlineTags = extractTags(body);
   const propertyTags = Array.isArray(frontmatter.tags) ? frontmatter.tags.map(String) :
     typeof frontmatter.tags === "string" ? frontmatter.tags.split(/[ ,]+/).filter(Boolean) : [];
   return { frontmatter, headings, wikiLinks, tags: [...new Set([...propertyTags, ...inlineTags])] };
@@ -115,4 +117,20 @@ export class VaultIndex {
       .sort((a, b) => b.score - a.score || b.modifiedAt - a.modifiedAt || a.path.localeCompare(b.path))
       .slice(0, Math.max(0, limit));
   }
+}
+
+// ─── Standalone functions ───────────────────────────────
+
+export function createVaultIndex(entries: VaultIndexEntryInput[] = []): VaultIndex {
+  return new VaultIndex(entries);
+}
+
+export function updateVaultIndex(index: VaultIndex, path: string, content: string): VaultIndex {
+  index.update({ path, content });
+  return index;
+}
+
+export function removeFromVaultIndex(index: VaultIndex, path: string): VaultIndex {
+  index.remove(path);
+  return index;
 }

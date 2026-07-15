@@ -22,6 +22,15 @@ export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBo
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error(`[ErrorBoundary:${this.props.name || "unknown"}]`, error, errorInfo);
+    try {
+      window.electronAPI?.logError?.({
+        message: error.message,
+        stack: error.stack,
+        timestamp: new Date().toISOString(),
+      });
+    } catch {
+      // Ignore IPC errors during error reporting
+    }
   }
 
   handleReload = () => {
