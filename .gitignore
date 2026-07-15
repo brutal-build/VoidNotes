@@ -20,7 +20,7 @@ setup.sh
 todo.txt
 docs/
 
-# Hermes / dev artifacts
-.hermes/
+dev artifacts
+
 .vercel/
 graphify-out/
