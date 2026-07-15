@@ -24,3 +24,8 @@ dev artifacts
 
 .vercel/
 graphify-out/
+hermes.md
+agents.md
+
+# Promo materials (local only)
+promo/
