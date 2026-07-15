@@ -86,7 +86,7 @@ export function useAutosave(
     onNoteSavedRef.current?.(note, content);
   }, [sessionCoordinator, setSaved, setAllContents, setBacklinks, setTagIndex, setErrorMessage]);
 
-  // Close handshake — always approve close so a failed flush cannot trap the window
+  // Close handshake - always approve close so a failed flush cannot trap the window
   useEffect(() => {
     const cleanup = window.electronAPI.onCloseRequested(async () => {
       try {

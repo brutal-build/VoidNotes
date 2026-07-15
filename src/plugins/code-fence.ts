@@ -22,14 +22,14 @@ export function extractCodeFences(text: string): { protected: string; fences: Ma
   const fences = new Map<string, CodeFence>();
   let result = text;
 
-  // Bloki kodu ``` (wieloliniowe) — najpierw je chowamy
+  // Bloki kodu ``` (wieloliniowe) - najpierw je chowamy
   result = result.replace(/```(\w*)\n([\s\S]*?)```/g, (_match, lang, body) => {
     const id = nextId();
     fences.set(id, { id, content: `\`\`\`${lang}\n${body}\`\`\``, isBlock: true });
     return id;
   });
 
-  // Inline code `...` — potem chowamy inline
+  // Inline code `...` - potem chowamy inline
   result = result.replace(/`([^`\n]+)`/g, (_match, body) => {
     const id = nextId();
     fences.set(id, { id, content: `\`${body}\``, isBlock: false });

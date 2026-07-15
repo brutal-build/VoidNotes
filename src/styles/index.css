@@ -2717,7 +2717,7 @@ kbd {
 }
 
 /* ============================================================
-   Left Ribbon — Vertical icon bar
+   Left Ribbon - Vertical icon bar
    ============================================================ */
 .left-ribbon {
   display: flex;
@@ -2764,7 +2764,7 @@ kbd {
 }
 
 /* ============================================================
-   Tab Bar — VS Code style tabs
+   Tab Bar - VS Code style tabs
    ============================================================ */
 .tab-bar {
   display: flex;
@@ -3485,7 +3485,7 @@ kbd {
 }
 
 /* ============================================================
-   Global Search — Ctrl+Shift+F
+   Global Search - Ctrl+Shift+F
    ============================================================ */
 .global-search-overlay {
   position: fixed;

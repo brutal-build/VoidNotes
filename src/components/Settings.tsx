@@ -233,7 +233,7 @@ export default function Settings({
           <div className="settings-section">
             <div className="settings-label">About</div>
             <p className="settings-hint">
-              Void Notes v{APP_VERSION} — expanded<br />
+              Void Notes v{APP_VERSION} - expanded<br />
               A knowledge management notepad with Obsidian-like features.<br />
               Built with Electron + React + CodeMirror 6.
             </p>

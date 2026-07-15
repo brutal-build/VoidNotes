@@ -1,5 +1,5 @@
 /**
- * wiki-links.ts — shared parser for [[wiki links]]
+ * wiki-links.ts - shared parser for [[wiki links]]
  *
  * Consolidated to avoid duplication between graph-engine.ts and frontmatter.ts.
  */
