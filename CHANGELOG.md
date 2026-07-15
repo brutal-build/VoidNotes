@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.4.0 — Feature Pack (2026-07-15)
+## v0.4.0 — Expanded (2026-07-15)
 
 ### New features
 
