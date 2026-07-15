@@ -96,7 +96,7 @@ export default function Settings({ onClose, onSwitchVault, theme, onThemeChange,
           <div className="settings-section">
             <div className="settings-label">About</div>
             <p className="settings-hint">
-              Void Notes v{APP_VERSION} — minimalistic<br />
+              Void Notes v{APP_VERSION} - minimalistic<br />
               A minimalist second-brain notepad.<br />
               Built with Electron + React + CodeMirror 6.
             </p>

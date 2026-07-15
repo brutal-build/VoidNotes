@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-<a href="https://www.producthunt.com/products/void-notes-minimalist-markdown-notepad?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-void-notes-minimalist-markdown-notepad" target="_blank" rel="noopener noreferrer"><img alt="Void Notes — Minimalist Markdown Notepad - A local-first Markdown second-brain  — free &amp; open-source | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1195560&amp;theme=dark&amp;t=1783978188675"></a></p>
+<a href="https://www.producthunt.com/products/void-notes-minimalist-markdown-notepad?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-void-notes-minimalist-markdown-notepad" target="_blank" rel="noopener noreferrer"><img alt="Void Notes - Minimalist Markdown Notepad - A local-first Markdown second-brain - free &amp; open-source | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1195560&amp;theme=dark&amp;t=1783978188675"></a></p>
 
 <p align="center">
   <a href="https://github.com/brutal-build/VoidNotes/actions/workflows/release.yml"><img src="https://img.shields.io/badge/build-release-blue?logo=github-actions" alt="Build" /></a>
@@ -21,7 +21,7 @@
 
 ---
 
-Built with **Electron 35** + **React 19** + **CodeMirror 6** + **d3-force**. No cloud, no telemetry, no account — your notes stay as plain `.md` files on your disk.
+Built with **Electron 35** + **React 19** + **CodeMirror 6** + **d3-force**. No cloud, no telemetry, no account - your notes stay as plain `.md` files on your disk.
 
 ---
 
@@ -35,21 +35,21 @@ Get the latest installer from the **[Releases](https://github.com/brutal-build/V
 
 ### Markdown Editor
 - Syntax highlighting, line numbers, bracket matching, auto-indent
-- **Live Preview** — toggle edit / preview / split view (`Ctrl+E`, `Ctrl+Shift+E`)
-- **Vim Keybindings** — optional modal editing (settings toggle)
-- **Spellcheck** — browser-native spellcheck, toggle in settings
-- **Readable Line Length** — optional width cap for comfortable reading
-- **Custom Editor Font** — any system font via settings
+- **Live Preview** - toggle edit / preview / split view (`Ctrl+E`, `Ctrl+Shift+E`)
+- **Vim Keybindings** - optional modal editing (settings toggle)
+- **Spellcheck** - browser-native spellcheck, toggle in settings
+- **Readable Line Length** - optional width cap for comfortable reading
+- **Custom Editor Font** - any system font via settings
 
 ### Wiki Links
 - `[[note-name]]` with autocomplete and click-to-navigate
 - Missing wiki-note creation dialog when clicking a non-existent link
-- Automatic **Backlinks** — reverse-link indexing across all notes
+- Automatic **Backlinks** - reverse-link indexing across all notes
 
 ### Tags & Properties
 - YAML frontmatter `tags:` + inline `#hashtags`
 - Filterable tag list in sidebar
-- **Properties Panel** — view and edit frontmatter fields (date, tags, custom)
+- **Properties Panel** - view and edit frontmatter fields (date, tags, custom)
 
 ### Callouts & Formatting
 - `> [!INFO]`, `> [!WARNING]`, `> [!TIP]`, `> [!ERROR]`
@@ -66,7 +66,7 @@ Get the latest installer from the **[Releases](https://github.com/brutal-build/V
 | **macOS Glass** | Gradient `#1a1a2e` to `#0f0f1a` | `#007aff` (blue) | Dark + blur |
 
 ### Left Ribbon
-Vertical icon bar with quick actions — new note, new folder, search, daily note, graph, templates, bookmarks, trash, settings.
+Vertical icon bar with quick actions - new note, new folder, search, daily note, graph, templates, bookmarks, trash, settings.
 
 ### Tab System
 VS Code-style tabs with drag reorder, close buttons, and dirty-state indicators. Unsaved changes show a Save / Discard / Cancel dialog.
@@ -78,7 +78,7 @@ Interactive force-directed graph of note connections. Custom canvas engine with 
 Four tab panels: **Backlinks**, **Tags**, **Outline** (heading tree), **Properties** (YAML frontmatter editor with debounced saves).
 
 ### Global Search
-`Ctrl+Shift+F` — indexed search across all notes with content preview and context snippets. Uses `VaultIndex` for O(1) lookup instead of linear scan.
+`Ctrl+Shift+F` - indexed search across all notes with content preview and context snippets. Uses `VaultIndex` for O(1) lookup instead of linear scan.
 
 ### Templates
 5 built-in templates: Daily Note, Meeting Notes, Project, Book Notes, Journal. Create from the Left Ribbon or `Ctrl+T`.
@@ -87,13 +87,13 @@ Four tab panels: **Backlinks**, **Tags**, **Outline** (heading tree), **Properti
 Star/bookmark notes via right-click context menu. Bookmarks get a **star icon** in the file tree and a dedicated panel. Auto-cleanup on delete.
 
 ### Trash
-Accidental delete moves files to `.void-trash/` inside the vault. Restore or permanently delete from the **Trash panel** — click a note to **preview its content** before deciding.
+Accidental delete moves files to `.void-trash/` inside the vault. Restore or permanently delete from the **Trash panel** - click a note to **preview its content** before deciding.
 
 ### Dialog System
-Custom `Dialog`, `ConfirmDialog`, and `InputDialog` components with full CSS. Replaces native `window.confirm()` / `window.prompt()`. Used everywhere — new note, new folder, delete, rename, wiki creation, trash permanent delete.
+Custom `Dialog`, `ConfirmDialog`, and `InputDialog` components with full CSS. Replaces native `window.confirm()` / `window.prompt()`. Used everywhere - new note, new folder, delete, rename, wiki creation, trash permanent delete.
 
 ### Focus Mode
-`F9` — hides everything except the editor. A subtle breadcrumb button restores the sidebar.
+`F9` - hides everything except the editor. A subtle breadcrumb button restores the sidebar.
 
 ### External Change Detection
 File watcher monitors the vault directory. If a file is created/deleted/modified outside the app, the UI updates automatically.
@@ -197,4 +197,4 @@ void-notes/
 
 ## License
 
-MIT — [brutal-build](https://github.com/brutal-build)
+MIT - [brutal-build](https://github.com/brutal-build)

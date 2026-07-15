@@ -88,7 +88,7 @@ Your note content here...`}</pre>
 
             <h3>File Tree</h3>
             <p>
-              The sidebar shows all your Markdown files. You can organize them into folders —
+              The sidebar shows all your Markdown files. You can organize them into folders - 
               the tree supports collapsible folders. Use the <strong>+</strong> button or <kbd>Ctrl+N</kbd> to create new notes.
             </p>
           </div>
